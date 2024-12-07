@@ -1,0 +1,55 @@
+{
+ "actions": [],
+ "creation": "2024-12-07 15:38:55.619375",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "purchase_invoice",
+  "party_account_currency",
+  "total_value",
+  "total_base_value"
+ ],
+ "fields": [
+  {
+   "fieldname": "purchase_invoice",
+   "fieldtype": "Link",
+   "label": "Purchase Invoice",
+   "options": "Purchase Invoice"
+  },
+  {
+   "fetch_from": "purchase_invoice.rounded_total",
+   "fieldname": "total_value",
+   "fieldtype": "Currency",
+   "label": "Total Value",
+   "options": "party_account_currency",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "purchase_invoice.base_rounded_total",
+   "fieldname": "total_base_value",
+   "fieldtype": "Currency",
+   "label": "Total Base Value",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "purchase_invoice.party_account_currency",
+   "fieldname": "party_account_currency",
+   "fieldtype": "Data",
+   "label": "Party Account Currency"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2024-12-07 16:18:24.674256",
+ "modified_by": "Administrator",
+ "module": "Importmanager",
+ "name": "Linked Purchase Invoices",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
