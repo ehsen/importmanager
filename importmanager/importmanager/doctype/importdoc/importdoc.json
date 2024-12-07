@@ -1,0 +1,119 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2024-11-30 10:05:03.757601",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_0uqv",
+  "date",
+  "column_break_5ski",
+  "bl_no",
+  "column_break_nz56",
+  "gd_no",
+  "column_break_hatu",
+  "supplier",
+  "section_break_ppms",
+  "linked_purchase_invoices",
+  "linked_import_charges",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_0uqv",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "ImportDoc",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1,
+   "width": "100"
+  },
+  {
+   "fieldname": "bl_no",
+   "fieldtype": "Data",
+   "label": "B/L No"
+  },
+  {
+   "fieldname": "gd_no",
+   "fieldtype": "Data",
+   "label": "GD No"
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier",
+   "options": "Supplier",
+   "reqd": 1
+  },
+  {
+   "fieldname": "linked_purchase_invoices",
+   "fieldtype": "Table",
+   "label": "Linked Purchase Invoices",
+   "options": "Linked Purchase Invoices"
+  },
+  {
+   "fieldname": "column_break_nz56",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_ppms",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_5ski",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_hatu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "linked_import_charges",
+   "fieldtype": "Table",
+   "label": "Linked Import Charges",
+   "options": "Linked Import Charges"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2024-12-07 17:10:40.394526",
+ "modified_by": "Administrator",
+ "module": "Importmanager",
+ "name": "ImportDoc",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
