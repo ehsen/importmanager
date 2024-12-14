@@ -129,9 +129,10 @@ app_license = "mit"
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+override_doctype_class = {
+ 	"Landed Cost Voucher": "importmanager.importmanager.overrides.custom_landed_cost_voucher.CustomLandedCostVoucher",
+     "Item Tax Template":"importmanager.importmanager.overrides.custom_item_tax_template.CustomItemTaxTemplate"
+}
 
 # Document Events
 # ---------------
