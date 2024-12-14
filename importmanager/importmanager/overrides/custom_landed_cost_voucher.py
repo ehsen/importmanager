@@ -8,7 +8,7 @@ from frappe.model.document import Document
 from frappe.model.meta import get_field_precision
 from frappe.query_builder.custom import ConstantColumn
 from frappe.utils import flt
-from importmanager.import_utils import calculate_import_assessment
+from importmanager.import_utils import calculate_import_assessment,create_import_taxes_jv
 
 import erpnext
 from erpnext.controllers.taxes_and_totals import init_landed_taxes_and_totals
@@ -73,9 +73,36 @@ class CustomLandedCostVoucher(Document):
 		if not self.get("items"):
 			self.get_items_from_purchase_receipts()
 
-		# calculate import assessment
-		calculate_import_assessment(self)
+		# calculate import assessment if voucher type is import
+		if self.custom_landed_cost_voucher_type == 'Import':
+			# If its an import voucher, in that case all charges will be applied systematically
+			# User cant add manually anything in it, to streamline the costing & regulatory compliance
+			#self.taxes = [] 
+			calculate_import_assessment(self)
+			self.distribute_charges_based_on = 'Distribute Manually'
+			self.apply_assessment_difference()
+			#self.distribute_charges_based_on = 'Distribute Manually'
+
+
 		self.set_applicable_charges_on_item()
+
+	def apply_assessment_difference(self):
+		total_assessment_diff = 0
+		assessment_variance_account = frappe.get_doc("Company",self.company).custom_assessment_variance_account
+		if not assessment_variance_account:
+			frappe.throw("Please Set Default Assessment Variance Account in Company Doc")
+		for d in self.get('items'):
+			total_assessment_diff += d.custom_base_assessment_difference
+		if assessment_variance_account:
+			self.taxes = []
+			self.append("taxes",{
+				'expense_account': assessment_variance_account,
+				'import_charge_type':'Assessment Difference',
+				'description':'Assessment Difference',
+				'amount':total_assessment_diff
+			})
+		
+
 
 	def validate_line_items(self):
 		for d in self.get("items"):
@@ -96,11 +123,24 @@ class CustomLandedCostVoucher(Document):
 					),
 					title=_("Incorrect Reference Document (Purchase Receipt Item)"),
 				)
+	
+	
+		
 
 	def check_mandatory(self):
 		if not self.get("purchase_receipts"):
 			frappe.throw(_("Please enter Receipt Document"))
-
+	
+	def validate_import_document(self):
+		if self.landed_cost_voucher_type == 'Import' and not self.get('import_document'):
+			frappe.throw('Please attach an import document')
+		
+		if self.get('import_document'):
+			import_doc = frappe.get_doc("ImportDoc",self.get('import_document'))
+			doc_status = [1,2]
+			if import_doc.docstatus in doc_status:
+				frappe.throw("Import document must be in Draft State, Import Doc {import_doc.name} is in {import_doc.status} state")
+			
 	def validate_receipt_documents(self):
 		receipt_documents = []
 
@@ -217,8 +257,18 @@ class CustomLandedCostVoucher(Document):
 			)
 
 	def on_submit(self):
+
 		self.validate_applicable_charges_for_item()
-		self.update_landed_cost()
+		try:
+			create_import_taxes_jv(self.name)
+			self.update_landed_cost()
+		except Exception:
+			frappe.db.rollback()
+			raise
+
+			
+
+		
 
 	def on_cancel(self):
 		self.update_landed_cost()

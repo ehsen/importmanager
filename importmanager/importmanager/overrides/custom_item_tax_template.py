@@ -55,7 +55,7 @@ class CustomItemTaxTemplate(Document):
                         ).format(d.idx)
                     )
                 else:
-                    if self.is_duplicate_accounts != 1:
+                    if self.custom_allow_duplicate_accounts != 1:
                         if d.tax_type in check_list:
                             frappe.throw(_("{0} entered twice in Item Tax").format(d.tax_type))
                         else:
