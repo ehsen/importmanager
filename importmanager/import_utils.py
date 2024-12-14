@@ -121,6 +121,37 @@ def create_import_taxes_jv(landed_cost_voucher):
             frappe.log_error(message=f"{str(e)}",title="Error Creating Import Jvs")
             frappe.db.rollback()
             frappe.throw("Error Creating Import JVs. Please Contact Support")
+def calculate_assessed_value(lcv_doc_item):
+    incoterm = frappe.get_doc(lcv_doc_item.receipt_document_type,lcv_doc_item.receipt_document).incoterm
+    
+    if incoterm is None:
+        frappe.throw("No Incoterm found in Purchase Invoice")
+    
+    ex_assess_value = lcv_doc_item.custom_assessed_value_per_unit * lcv_doc_item.qty
+    lcv_doc_item.custom_cfr_value = ex_assess_value
+    lcv_doc_item.custom_landing_charges_1 = (ex_assess_value + lcv_doc_item.custom_insurance) * 0.01
+    lcv_doc_item.custom_assessed_value = lcv_doc_item.custom_cfr_value + lcv_doc_item.custom_landing_charges_1 + lcv_doc_item.custom_insurance
+    lcv_doc_item.custom_base_assessed_value = round(lcv_doc_item.custom_assessed_value * lcv_doc_item.custom_exchange_rate)
+
+
+
+
+
+def calculate_import_assessment(lcv_doc):
+    print(f"lcv doc items are {lcv_doc.items}")
+    for item in lcv_doc.items:
+        
+        calculate_assessed_value(item)
+        #lcv_doc.save()
+        #frappe.db.commit()
+
+def calculate_import_taxes(lcv_item):
+    item = frappe.get_cached_doc("Item",lcv_item.item_code)
+    
+
+
+    
+
             
 
 

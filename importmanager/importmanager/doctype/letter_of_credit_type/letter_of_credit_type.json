@@ -1,0 +1,45 @@
+{
+ "actions": [],
+ "autoname": "field:letter_of_credit_type",
+ "creation": "2024-12-13 13:10:29.807432",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "letter_of_credit_type"
+ ],
+ "fields": [
+  {
+   "fieldname": "letter_of_credit_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Letter Of Credit Type",
+   "reqd": 1,
+   "unique": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2024-12-13 13:11:45.180936",
+ "modified_by": "Administrator",
+ "module": "Importmanager",
+ "name": "Letter Of Credit Type",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

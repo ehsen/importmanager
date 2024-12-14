@@ -1,0 +1,198 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2024-12-13 13:02:25.118460",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_tab",
+  "import_document",
+  "issuing_date",
+  "expiry_date",
+  "lc_type",
+  "effective_date",
+  "place_of_expiry",
+  "column_break_4buq",
+  "issuing_bank",
+  "advising_bank",
+  "applicant",
+  "benificiary",
+  "third_party",
+  "financials_section",
+  "currency_code",
+  "lc_amount",
+  "positive_tolerance",
+  "negative_tolerance",
+  "column_break_nxsb",
+  "payment_terms",
+  "payment_due_date",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "issuing_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Issuing Date",
+   "no_copy": 1,
+   "print_hide": 1,
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "expiry_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Expiry Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "lc_type",
+   "fieldtype": "Link",
+   "label": "LC Type",
+   "options": "Letter Of Credit Type"
+  },
+  {
+   "fieldname": "effective_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Effective Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "place_of_expiry",
+   "fieldtype": "Link",
+   "label": "Place Of Expiry",
+   "options": "Location"
+  },
+  {
+   "fieldname": "column_break_4buq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "issuing_bank",
+   "fieldtype": "Link",
+   "label": "Issuing Bank",
+   "options": "Bank",
+   "reqd": 1
+  },
+  {
+   "fieldname": "advising_bank",
+   "fieldtype": "Link",
+   "label": "Advising Bank",
+   "options": "Bank",
+   "reqd": 1
+  },
+  {
+   "fieldname": "applicant",
+   "fieldtype": "Link",
+   "label": "Applicant",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "benificiary",
+   "fieldtype": "Link",
+   "label": "Benificiary",
+   "options": "Supplier",
+   "reqd": 1
+  },
+  {
+   "fieldname": "third_party",
+   "fieldtype": "Data",
+   "label": "Third Pary (If Any)"
+  },
+  {
+   "fieldname": "financials_section",
+   "fieldtype": "Tab Break",
+   "label": "Financials"
+  },
+  {
+   "fieldname": "currency_code",
+   "fieldtype": "Link",
+   "label": "Currency Code",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "lc_amount",
+   "fieldtype": "Float",
+   "label": "LC Amount"
+  },
+  {
+   "default": "0",
+   "fieldname": "positive_tolerance",
+   "fieldtype": "Float",
+   "label": "Positive Tolerance %"
+  },
+  {
+   "default": "0",
+   "fieldname": "negative_tolerance",
+   "fieldtype": "Float",
+   "label": "Negative Tolerance"
+  },
+  {
+   "fieldname": "column_break_nxsb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payment_terms",
+   "fieldtype": "Select",
+   "label": "Payment Terms",
+   "options": "Sight Payment\nDeferred Payment\nAcceptance\nNegotiation",
+   "reqd": 1
+  },
+  {
+   "fieldname": "payment_due_date",
+   "fieldtype": "Date",
+   "label": "Payment Due Date (For Acceptance Or Deffered)"
+  },
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Letter Of Credit",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "import_document",
+   "fieldtype": "Link",
+   "label": "Import Document",
+   "options": "ImportDoc"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2024-12-13 14:14:55.285437",
+ "modified_by": "Administrator",
+ "module": "Importmanager",
+ "name": "Letter Of Credit",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
