@@ -97,29 +97,28 @@ def create_import_taxes_jv(landed_cost_voucher):
             if item.custom_stamnt > 0:
                 
                 create_journal_voucher("ST PakistanCustoms",lcv_doc.posting_date,get_sales_tax_entries(item,company),
-                                    import_document=lcv_doc.name)
+                                    import_document=lcv_doc.custom_import_document)
             
             if item.custom_ast > 0:
                 
                 create_journal_voucher("AST PakistanCustoms",lcv_doc.posting_date,get_additional_sales_tax_entries(item,company),
-                                    import_document=lcv_doc.name)
+                                    import_document=lcv_doc.custom_import_document)
             
             if item.custom_it > 0:
                 create_journal_voucher("IT PakistanCustoms",lcv_doc.posting_date,get_advance_income_tax_entries(item,company),
-                                    import_document=lcv_doc.name)
+                                    import_document=lcv_doc.custom_import_document)
             
             if item.custom_cd > 0:
                 create_journal_voucher("CD PakistanCustoms",lcv_doc.posting_date,get_custom_duty_entries(item,company),
-                                    import_document=lcv_doc.name)
+                                    import_document=lcv_doc.custom_import_document)
             
             if item.custom_acd > 0:
                 create_journal_voucher("ACD PakistanCustoms",lcv_doc.posting_date,get_additional_custom_duty_entries(item,company),
-                                    import_document=lcv_doc.name)
+                                    import_document=lcv_doc.custom_import_document)
             
-            frappe.db.commit() # Commit the transaction to DB
+        
         except Exception as e:
             frappe.log_error(message=f"{str(e)}",title="Error Creating Import Jvs")
-            frappe.db.rollback()
             frappe.throw("Error Creating Import JVs. Please Contact Support")
 def calculate_assessed_value(lcv_doc_item):
     incoterm = frappe.get_doc(lcv_doc_item.receipt_document_type,lcv_doc_item.receipt_document).incoterm
@@ -132,7 +131,7 @@ def calculate_assessed_value(lcv_doc_item):
     lcv_doc_item.custom_landing_charges_1 = (ex_assess_value + lcv_doc_item.custom_insurance) * 0.01
     lcv_doc_item.custom_assessed_value = lcv_doc_item.custom_cfr_value + lcv_doc_item.custom_landing_charges_1 + lcv_doc_item.custom_insurance
     lcv_doc_item.custom_base_assessed_value = round(lcv_doc_item.custom_assessed_value * lcv_doc_item.custom_exchange_rate)
-
+    
 
 
 
@@ -142,13 +141,50 @@ def calculate_import_assessment(lcv_doc):
     for item in lcv_doc.items:
         
         calculate_assessed_value(item)
+        calculate_import_taxes(item)
         #lcv_doc.save()
         #frappe.db.commit()
 
+def get_taxes_by_category(tax_template_name):
+    query = """
+            select custom_tax_category,tax_rate from `tabItem Tax Template Detail` where parent = '{tax_template_name}';
+            """.format(tax_template_name=tax_template_name)
+    result = frappe.db.sql(query,as_dict=1)
+    taxes_dict = {}
+    for item in result:
+        taxes_dict[item['custom_tax_category']] = item['tax_rate']
+    
+    return taxes_dict
+
+
+
 def calculate_import_taxes(lcv_item):
     item = frappe.get_cached_doc("Item",lcv_item.item_code)
-    
+    tax_list = frappe.get_list("Item Tax Template",filters={'custom_customs_tariff_number':item.customs_tariff_number},
+                               fields=['name'],pluck='name')
+    if len(tax_list) > 0:
+        # get taxes here
+        tax_dict = get_taxes_by_category(tax_list[0])
+        
+        
+        lcv_item.custom_cd = tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value
+        lcv_item.custom_acd = tax_dict.get('ACD',0)/100 * lcv_item.custom_base_assessed_value
+        amount_for_sales_tax = lcv_item.custom_base_assessed_value + lcv_item.custom_cd + lcv_item.custom_acd
+        lcv_item.custom_ast = tax_dict.get('AST',0)/100 * amount_for_sales_tax
+        lcv_item.custom_stamnt = tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax
+        amount_for_it = amount_for_sales_tax + lcv_item.custom_ast + lcv_item.custom_stamnt
+        lcv_item.custom_it = tax_dict.get('IT',0)/100 * amount_for_it
+        lcv_item.custom_total_duties_and_taxes = lcv_item.custom_cd+lcv_item.custom_acd+lcv_item.custom_stamnt + lcv_item.custom_ast+lcv_item.custom_it
+        lcv_item.custom_base_assessment_difference = lcv_item.custom_base_assessed_value - lcv_item.amount
+        lcv_item.applicable_charges = lcv_item.custom_base_assessment_difference
+        # Following asserrtion must pass if all above calculations are correct
+        assert(lcv_item.amount + lcv_item.custom_base_assessment_difference == lcv_item.custom_base_assessed_value)
 
+
+
+ 
+    
+    
 
     
 
