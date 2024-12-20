@@ -1,0 +1,154 @@
+{
+ "actions": [],
+ "autoname": "format: LC-SETTLE-{#}",
+ "creation": "2024-12-19 13:23:21.346575",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "letter_of_credit_to_settle",
+  "import_document",
+  "column_break_4dqo",
+  "lc_amount",
+  "exchange_rate_at_init",
+  "settlement_exchange_rate",
+  "column_break_x7fo",
+  "base_lc_amount",
+  "settlement_base_lc_amount",
+  "base_exchange_gains_losses",
+  "section_break_ikl6",
+  "lc_charges",
+  "total_settlement_amount",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "letter_of_credit_to_settle",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Letter Of Credit To Settle",
+   "options": "Letter Of Credit",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_4dqo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "letter_of_credit_to_settle.lc_amount",
+   "fieldname": "lc_amount",
+   "fieldtype": "Currency",
+   "label": "LC Amount",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "letter_of_credit_to_settle.exchange_rate",
+   "fieldname": "exchange_rate_at_init",
+   "fieldtype": "Float",
+   "label": "Exchange Rate At LC Issuing Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "settlement_exchange_rate",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Settlement Exchange Rate",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_x7fo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fetch_from": "letter_of_credit_to_settle.base_lc_amount",
+   "fieldname": "base_lc_amount",
+   "fieldtype": "Currency",
+   "label": "Base LC Amount",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "settlement_base_lc_amount",
+   "fieldtype": "Currency",
+   "label": "Settlement LC Amount",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "base_exchange_gains_losses",
+   "fieldtype": "Currency",
+   "label": "Exchange Gains/Losses On LC Settlement"
+  },
+  {
+   "fieldname": "section_break_ikl6",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "lc_charges",
+   "fieldtype": "Currency",
+   "label": "LC Charges"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_settlement_amount",
+   "fieldtype": "Currency",
+   "label": "Total Settlement Amount"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "LC Settlement",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "letter_of_credit_to_settle.import_document",
+   "fieldname": "import_document",
+   "fieldtype": "Link",
+   "label": "Import Document",
+   "options": "ImportDoc",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2024-12-20 18:50:16.345024",
+ "modified_by": "Administrator",
+ "module": "Importmanager",
+ "name": "LC Settlement",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

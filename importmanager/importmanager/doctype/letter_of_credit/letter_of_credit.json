@@ -1,12 +1,13 @@
 {
  "actions": [],
- "allow_rename": 1,
+ "autoname": "field:lc_no",
  "creation": "2024-12-13 13:02:25.118460",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "general_tab",
   "import_document",
+  "lc_no",
   "issuing_date",
   "expiry_date",
   "lc_type",
@@ -26,6 +27,9 @@
   "column_break_nxsb",
   "payment_terms",
   "payment_due_date",
+  "exchange_rate",
+  "base_lc_amount",
+  "lc_settlement",
   "amended_from"
  ],
  "fields": [
@@ -36,7 +40,6 @@
    "label": "Issuing Date",
    "no_copy": 1,
    "print_hide": 1,
-   "read_only": 1,
    "reqd": 1,
    "search_index": 1
   },
@@ -167,18 +170,51 @@
    "fieldtype": "Link",
    "label": "Import Document",
    "options": "ImportDoc"
+  },
+  {
+   "fieldname": "exchange_rate",
+   "fieldtype": "Float",
+   "label": "Exchange Rate",
+   "reqd": 1
+  },
+  {
+   "fieldname": "lc_no",
+   "fieldtype": "Data",
+   "label": "LC No",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "lc_settlement",
+   "fieldtype": "Link",
+   "label": "LC Settlement",
+   "options": "LC Settlement"
+  },
+  {
+   "fieldname": "base_lc_amount",
+   "fieldtype": "Currency",
+   "label": "Base LC Amount",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
- "links": [],
- "modified": "2024-12-13 14:14:55.285437",
+ "links": [
+  {
+   "link_doctype": "LC Settlement",
+   "link_fieldname": "letter_of_credit_to_settle"
+  }
+ ],
+ "modified": "2024-12-20 17:02:52.146109",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "Letter Of Credit",
+ "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
   {
+   "amend": 1,
+   "cancel": 1,
    "create": 1,
    "delete": 1,
    "email": 1,

@@ -16,22 +16,14 @@
   "section_break_ppms",
   "linked_purchase_invoices",
   "linked_import_charges",
+  "linked_misc_import_charges",
+  "items",
   "amended_from"
  ],
  "fields": [
   {
    "fieldname": "section_break_0uqv",
    "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "amended_from",
-   "fieldtype": "Link",
-   "label": "Amended From",
-   "no_copy": 1,
-   "options": "ImportDoc",
-   "print_hide": 1,
-   "read_only": 1,
-   "search_index": 1
   },
   {
    "columns": 1,
@@ -87,12 +79,34 @@
    "fieldtype": "Table",
    "label": "Linked Import Charges",
    "options": "Linked Import Charges"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Import Items"
+  },
+  {
+   "fieldname": "linked_misc_import_charges",
+   "fieldtype": "Table",
+   "label": "Linked Misc Import Charges",
+   "options": "Linked Misc Import Charges"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "ImportDoc",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2024-12-07 17:10:40.394526",
+ "modified": "2024-12-20 18:23:32.198102",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "ImportDoc",
