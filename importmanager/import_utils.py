@@ -180,6 +180,88 @@ def calculate_import_taxes(lcv_item):
         # Following asserrtion must pass if all above calculations are correct
         assert(lcv_item.amount + lcv_item.custom_base_assessment_difference == lcv_item.custom_base_assessed_value)
 
+def update_import_charges_in_import(doc):
+    # This function will accumualte import charges in ImportDoc from Individual Doc
+    import_charges = []
+    data_dict = {}
+    import_doc = frappe.get_doc("ImportDoc",doc.custom_import_document)
+    for item in doc.items:
+        data_dict['document_type'] = "Purchase Invoice"
+        data_dict['doc_name'] = doc.name
+        data_dict['charge_item'] = item.item_name
+        data_dict['paid_to'] = doc.supplier
+        data_dict['amount'] = item.amount
+        data_dict['purchase_invoice_item'] = item.name
+        import_doc.append("linked_import_charges",data_dict)
+    
+    import_doc.save()
+
+def update_line_items(import_doc_name):
+    linked_items = []
+    linked_pi = frappe.get_list("Purchase Invoice",filters={'docstatus':1,"custom_purchase_invoice_type":"Import",
+                                                               "custom_import_document":import_doc_name},fields=['name'],pluck='name')
+    
+    linked_items = frappe.get_list('Purchase Invoice Item',filters={'parent':['in',linked_pi]},fields=['name'],pluck='name')
+    print(linked_items)
+    import_doc = frappe.get_doc("ImportDoc",import_doc_name)
+    data_dict = {}
+    import_doc.items = []
+    for item in linked_items:
+        pi_item = frappe.get_doc("Purchase Invoice Item",item)
+        data_dict['purchase_invoice'] = pi_item.parent
+        data_dict['item_code'] = pi_item.item_code
+        data_dict['item_name'] = pi_item.item_name
+        data_dict['uom'] = pi_item.uom
+        data_dict['qty'] = pi_item.qty
+        data_dict['amount'] = pi_item.base_amount
+        import_doc.append("items",data_dict)
+    
+    import_doc.save()
+
+
+
+def update_misc_import_charges(import_doc_name):
+    # This function will fetch all charges not covered in service invoices
+    # For now it ll deal with LC Charges/ Any Exchange Gains/Losses
+    import_doc = frappe.get_doc("ImportDoc",import_doc_name)
+    lc_settlements = frappe.get_list("LC Settlement",filters={'import_document':import_doc_name,'docstatus':1},fields=[
+        'name','lc_charges','letter_of_credit_to_settle'
+    ])
+    print(lc_settlements)
+    if len(lc_settlements) > 0:
+        lc_doc = frappe.get_doc("Letter Of Credit",lc_settlements[0]['letter_of_credit_to_settle'])
+        print(lc_doc)
+        data_dict = {}
+        for item in lc_settlements:
+            data_dict['document_type'] = 'LC Settlement'
+            data_dict['document_name'] = item['name']
+            data_dict['import_charge_type'] = "LC Charges"
+            data_dict['paid_to'] = lc_doc.issuing_bank
+            data_dict['amount'] = item['lc_charges']
+            import_doc.append("linked_misc_import_charges",data_dict)
+        import_doc.save()
+
+def bulk_update_import_charges(import_doc_name):
+    linked_pi = frappe.get_list("Purchase Invoice",filters={'docstatus':1,"custom_purchase_invoice_type":"Import Service Charges",
+                                                               "custom_import_document":import_doc_name},fields=['name'],pluck='name')
+
+    for item in linked_pi:
+        
+        update_import_charges_in_import(frappe.get_doc("Purchase Invoice",item))
+
+
+    #frappe.db.commit()
+
+def update_data_in_import_doc(import_doc_name):
+    #bulk_update_import_charges(import_doc_name)
+    update_misc_import_charges(import_doc_name)
+    update_line_items(import_doc_name)
+    
+    frappe.db.commit()
+
+
+
+
 
 
  
