@@ -85,6 +85,14 @@ def get_additional_custom_duty_entries(lcv_item,company):
     accounts_list.append(credit_dict)
     return accounts_list
 
+def get_cess_amount_entries(lcv_item,company):
+    accounts_list = []
+    debit_dict = {'account':company.custom_unallocated_import_charges_account,'debit':lcv_item.custom_cess_amount,'credit':0}
+    credit_dict = {'account':company.custom_default_gov_payable_account,'party_type':'Government','party':'Sindh Excise and Taxation','debit':0,'credit':lcv_item.custom_cess_amount}
+    accounts_list.append(debit_dict)
+    accounts_list.append(credit_dict)
+    return accounts_list
+
 def create_import_taxes_jv(landed_cost_voucher):
     lcv_doc = frappe.get_doc("Landed Cost Voucher",landed_cost_voucher)
     company = frappe.get_cached_doc("Company",lcv_doc.company)
@@ -114,6 +122,10 @@ def create_import_taxes_jv(landed_cost_voucher):
             
             if item.custom_acd > 0:
                 create_journal_voucher("ACD PakistanCustoms",lcv_doc.posting_date,get_additional_custom_duty_entries(item,company),
+                                    import_document=lcv_doc.custom_import_document)
+            
+            if item.custom_cess_amount > 0:
+                create_journal_voucher("Cess Sindh Excise and Taxation",lcv_doc.posting_date,get_cess_amount_entries(item,company),
                                     import_document=lcv_doc.custom_import_document)
             
         
@@ -218,6 +230,33 @@ def update_line_items(import_doc_name):
     
     import_doc.save()
 
+def get_customs_duty(import_doc_name):
+    lcv = frappe.get_list("Landed Cost Voucher",filters={'custom_import_document':import_doc_name, 'docstatus':1},fields=['name'],pluck='name')
+    custom_duty = 0
+    acd = 0
+    cess = 0
+    item_wise_duty = {}
+    
+    for item in lcv:
+        lcv_doc = frappe.get_doc("Landed Cost Voucher",item)
+        for lcv_item in lcv_doc.items:
+            custom_duty += lcv_item.custom_cd
+            acd += lcv_item.custom_acd
+            cess += lcv_item.custom_cess_amount
+            if lcv_item.item_code not in item_wise_duty:
+                item_wise_duty[lcv_item.item_code] = {'custom_duty':lcv_item.custom_cd,'acd':lcv_item.custom_acd,'cess':
+                lcv_item.custom_cess_amount}
+            elif lcv_item.item_code in item_wise_duty:
+                item_wise_duty[lcv_item.item_code]['custom_duty'] += lcv_item.custom_cd
+                item_wise_duty[lcv_item.item_code]['acd'] += lcv_item.custom_acd
+                item_wise_duty[lcv_item.item_code]['cess'] += lcv_item.custom_acd
+        
+    return {'item_wise_duty':item_wise_duty,'total':{'custom_duty':custom_duty,'acd':acd,'cess':cess}}
+
+def update_customs_duty(import_doc_name):
+    custom_data = get_customs_duty(import_doc_name)
+    import_doc = frappe.get_doc("ImportDoc",import_doc_name)
+    
 
 
 def update_misc_import_charges(import_doc_name):
@@ -239,11 +278,27 @@ def update_misc_import_charges(import_doc_name):
             data_dict['paid_to'] = lc_doc.issuing_bank
             data_dict['amount'] = item['lc_charges']
             import_doc.append("linked_misc_import_charges",data_dict)
-        import_doc.save()
+        
+    custom_data = get_customs_duty(import_doc_name)['total']
+    total_customs_duty = custom_data['custom_duty'] + custom_data['acd']
+    total_cess = custom_data['cess']
+    if total_customs_duty > 0:
+        import_doc.append("linked_misc_import_charges", {'import_charge_type':'Customs Duty',
+        'amount':total_customs_duty})
+    
+    if total_cess > 0:
+        import_doc.append("linked_misc_import_charges", {'import_charge_type':'Cess',
+        'amount':total_cess})
+    
+    
+
+    import_doc.save()
 
 def bulk_update_import_charges(import_doc_name):
     linked_pi = frappe.get_list("Purchase Invoice",filters={'docstatus':1,"custom_purchase_invoice_type":"Import Service Charges",
                                                                "custom_import_document":import_doc_name},fields=['name'],pluck='name')
+
+    
 
     for item in linked_pi:
         
@@ -252,11 +307,51 @@ def bulk_update_import_charges(import_doc_name):
 
     #frappe.db.commit()
 
+
+    
+
+
+
+
+def calculate_total_import_charges(import_doc_name):
+    # this function will loop over all ex tax import charges and accumualte them for
+    # allocating to item
+    import_doc = frappe.get_doc("ImportDoc",import_doc_name)
+    
+    total_import_charges = sum(row.amount for row in import_doc.linked_import_charges) or 0
+    total_misc_import_charges = sum(row.amount for row in import_doc.linked_misc_import_charges) or 0
+    import_doc.total_import_charges = total_import_charges + total_misc_import_charges
+    import_doc.save()
+
+def allocate_import_charges(import_doc_name):
+    # Import Charges Will be allocated proporitanlly as per item amount
+    
+    import_doc = frappe.get_doc("ImportDoc",import_doc_name)
+    if import_doc.total_import_charges > 0:
+        total_items_amount = sum(row.amount for row in import_doc.items)
+        for item in import_doc.items:
+            item.allocated_import_charges = item.amount/total_items_amount * import_doc.total_import_charges
+            item.net_unit_cost = (item.allocated_import_charges + item.amount)/item.qty
+        total_allocated_charges = sum(item.allocated_import_charges for item in import_doc.items)
+        assert(total_allocated_charges == import_doc.total_import_charges)
+        import_doc.save()
+
+    
+
+
 def update_data_in_import_doc(import_doc_name):
-    #bulk_update_import_charges(import_doc_name)
+    doc = frappe.get_doc("ImportDoc",import_doc_name)
+    doc.items = []
+    doc.linked_import_charges = []
+    doc.linked_misc_import_charges = []
+    doc.save()
+    
+    
+    bulk_update_import_charges(import_doc_name)
     update_misc_import_charges(import_doc_name)
     update_line_items(import_doc_name)
-    
+    calculate_total_import_charges(import_doc_name)
+    allocate_import_charges(import_doc_name)
     frappe.db.commit()
 
 
