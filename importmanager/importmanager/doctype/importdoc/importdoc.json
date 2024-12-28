@@ -14,11 +14,14 @@
   "gd_no",
   "column_break_hatu",
   "supplier",
+  "company",
   "section_break_ppms",
   "linked_purchase_invoices",
   "linked_import_charges",
   "linked_misc_import_charges",
   "total_import_charges",
+  "total_customs_duty",
+  "total_cost",
   "item_wise_costing_tab",
   "items",
   "amended_from"
@@ -121,12 +124,30 @@
    "fieldtype": "Currency",
    "label": "Total Import Charges",
    "read_only": 1
+  },
+  {
+   "fieldname": "total_cost",
+   "fieldtype": "Currency",
+   "label": "Total Cost",
+   "read_only": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "total_customs_duty",
+   "fieldtype": "Currency",
+   "label": "Total Customs Duty"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2024-12-21 16:56:03.233869",
+ "modified": "2024-12-28 17:07:21.590697",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "ImportDoc",

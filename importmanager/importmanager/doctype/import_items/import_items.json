@@ -12,7 +12,10 @@
   "uom",
   "amount",
   "allocated_import_charges",
-  "net_unit_cost"
+  "net_unit_cost",
+  "st_unit_cost",
+  "allocated_charges_ex_cd",
+  "purchase_receipt_item"
  ],
  "fields": [
   {
@@ -64,12 +67,29 @@
    "fieldname": "net_unit_cost",
    "fieldtype": "Float",
    "label": "Net Unit Cost"
+  },
+  {
+   "default": "0",
+   "fieldname": "st_unit_cost",
+   "fieldtype": "Float",
+   "label": "ST Unit Cost",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "allocated_charges_ex_cd",
+   "fieldtype": "Float",
+   "label": "Allocated Charges Ex CD"
+  },
+  {
+   "fieldname": "purchase_receipt_item",
+   "fieldtype": "Data",
+   "label": "Purchase Receipt Item"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2024-12-20 17:28:36.422071",
+ "modified": "2024-12-28 17:40:43.324650",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "Import Items",
