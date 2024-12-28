@@ -80,28 +80,38 @@ class CustomLandedCostVoucher(Document):
 			#self.taxes = [] 
 			calculate_import_assessment(self)
 			self.distribute_charges_based_on = 'Distribute Manually'
-			self.apply_assessment_difference()
+			self.set_applicable_import_charges()
+			#self.set_total_taxes_and_charges()
 			#self.distribute_charges_based_on = 'Distribute Manually'
 
 
 		self.set_applicable_charges_on_item()
 
-	def apply_assessment_difference(self):
+	def apply_assessment_difference_and_duty(self):
 		total_assessment_diff = 0
-		assessment_variance_account = frappe.get_doc("Company",self.company).custom_assessment_variance_account
-		if not assessment_variance_account:
-			frappe.throw("Please Set Default Assessment Variance Account in Company Doc")
+		total_custom_duty = 0
+		unallocated_import_charges_account = frappe.get_doc("Company",self.company).custom_unallocated_import_charges_account
+		if not unallocated_import_charges_account:
+			frappe.throw("Please Set Default Unallocated Import Charges Account in Company Doc")
 		for d in self.get('items'):
 			total_assessment_diff += d.custom_base_assessment_difference
-		if assessment_variance_account:
-			self.taxes = []
+			total_custom_duty += (d.custom_cd + d.custom_acd)
+		if unallocated_import_charges_account:
+			
 			self.append("taxes",{
-				'expense_account': assessment_variance_account,
-				'import_charge_type':'Assessment Difference',
-				'description':'Assessment Difference',
-				'amount':total_assessment_diff
+				'expense_account': unallocated_import_charges_account,
+				'import_charge_type':'CD+Assessment Difference',
+				'description':'CD+Assessment Difference Charged to Stock Valuation',
+				'amount':total_assessment_diff + total_custom_duty
 			})
+	
 		
+
+	def set_applicable_import_charges(self):
+		self.taxes = []
+		self.apply_assessment_difference_and_duty()
+		
+	
 
 
 	def validate_line_items(self):
@@ -268,10 +278,15 @@ class CustomLandedCostVoucher(Document):
 
 			
 
-		
+	def cancel_all_linked_jvs(self):
+		linked_jv = frappe.get_list("Journal Voucher",filters={'custom_import_document':self.custom_import_document,'docstatus':1},fields=['name'],pluck='name')
+		for item in linked_jv:
+			frappe.get_doc("Journal Voucher",item).cancel()
+
 
 	def on_cancel(self):
 		self.update_landed_cost()
+		
 
 	def update_landed_cost(self):
 		for d in self.get("purchase_receipts"):
