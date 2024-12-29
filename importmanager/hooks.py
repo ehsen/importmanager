@@ -138,13 +138,11 @@ override_doctype_class = {
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Sales Invoice": {
+		"on_submit": "importmanager.importmanager.controllers.charge_allocation_controller.on_submit_create_allocation_entries",
+	}
+}
 
 # Scheduled Tasks
 # ---------------
