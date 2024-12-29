@@ -279,13 +279,14 @@ class CustomLandedCostVoucher(Document):
 			
 
 	def cancel_all_linked_jvs(self):
-		linked_jv = frappe.get_list("Journal Voucher",filters={'custom_import_document':self.custom_import_document,'docstatus':1},fields=['name'],pluck='name')
+		linked_jv = frappe.get_list("Journal Entry",filters={'custom_import_document':self.custom_import_document,'docstatus':1,'is_system_generated':1},fields=['name'],pluck='name')
 		for item in linked_jv:
-			frappe.get_doc("Journal Voucher",item).cancel()
+			frappe.get_doc("Journal Entry",item).cancel()
 
 
 	def on_cancel(self):
 		self.update_landed_cost()
+		self.cancel_all_linked_jvs()
 		
 
 	def update_landed_cost(self):
