@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import nowdate
+from erpnext import get_default_cost_center
 
 def create_journal_voucher(title, posting_date, accounts,import_document=None):
     """
@@ -45,7 +46,7 @@ def create_journal_voucher(title, posting_date, accounts,import_document=None):
     return f"Journal Entry '{jv.name}' created successfully."
 
 
-def create_gl_entries(posting_date, accounts, against_voucher_type=None,against_voucher=None):
+def create_gl_entries(posting_date, accounts, company):
     """
     Create GL Entries in ERPNext.
 
@@ -56,10 +57,12 @@ def create_gl_entries(posting_date, accounts, against_voucher_type=None,against_
                          {"account": "Debtors - CO", "debit": 1000, "credit": 0},
                          {"account": "Sales - CO", "debit": 0, "credit": 1000},
                      ]
-    :param import_document: (Optional) Reference for the import document.
+    :param against_voucher_type: (Optional) Type of the voucher for the entry.
+    :param against_voucher: (Optional) The voucher for which the GL entry is created.
     :return: List of GL Entry names or an error message.
     """
-
+    
+    print(accounts)
     # Prepare GL Entry details
     gl_entries = []
     for acc in accounts:
@@ -68,23 +71,27 @@ def create_gl_entries(posting_date, accounts, against_voucher_type=None,against_
         gl_entry.account = acc["account"]
         gl_entry.debit = acc.get("debit", 0)
         gl_entry.credit = acc.get("credit", 0)
-        gl_entry.cost_center = acc.get("cost_center", None)
+        gl_entry.cost_center = acc.get("cost_center", get_default_cost_center(company))
         gl_entry.party_type = acc.get("party_type", None)
         gl_entry.party = acc.get("party", None)
-
-        if (against_voucher and against_voucher_type) is not None:
-            gl_entry.against_voucher_type = against_voucher_type
-            gl_entry.against_voucher = against_voucher
+        gl_entry.company = company
 
         
-        # Add to list for bulk insert
-        gl_entries.append(gl_entry)
-    
-    # Insert GL Entries
-    if gl_entries:
-        frappe.bulk_insert(gl_entries)
-    
+        gl_entry.voucher_type = acc.get("voucher_type",None)
+        gl_entry.voucher_no = acc.get("voucher_no",None)
+        gl_entry.voucher_subtype = acc.get("voucher_subtype",None)
+        gl_entry.against = acc.get("account",None)
+
+        # Insert GL Entry one by one (instead of bulk insert)
+        try:
+            gl_entry.insert()  # This will trigger validation and insert each entry individually
+            gl_entries.append(gl_entry)
+        except Exception as e:
+            frappe.log_error(f"Error inserting GL Entry: {str(e)}", "GL Entry Insertion Error")
+
+    # Return the list of names of successfully inserted entries
     return [entry.name for entry in gl_entries]
+
 
     
 
@@ -138,10 +145,11 @@ def get_cess_amount_entries(lcv_item,company):
 
 def get_assessment_variance_transfer_entry(lcv_item,company):
     accounts_list = []
-    debit_dict = {'account':company.custom_assessment_variance_account,'debit':lcv_item.custom_base_assessment_difference,'credit':0}
-    credit_dict = {'account':company.custom_unallocated_import_charges_account,'debit':0,'credit':lcv_item.custom_base_assessment_difference}
+    debit_dict = {'account':company.custom_unallocated_import_charges_account,'debit':lcv_item.custom_base_assessment_difference,'credit':0}
+    credit_dict = {'account':company.custom_assessment_variance_account,'debit':0,'credit':lcv_item.custom_base_assessment_difference}
     accounts_list.append(debit_dict)
     accounts_list.append(credit_dict)
+    return accounts_list
 
 
 def create_import_taxes_jv(landed_cost_voucher):
