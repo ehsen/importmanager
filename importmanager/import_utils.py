@@ -488,6 +488,31 @@ def allocate_import_charges(import_doc_name):
     
 
 
+
+def set_expense_head(doc, method):
+    """
+    Hook for Purchase Invoice on_save event.
+    If custom_purchase_invoice_type == "Import Service Charges" and import_document is not None,
+    set the expense head of each Purchase Invoice Item to the custom_unallocated_import_charges_account
+    from the Company Doc.
+    """
+    if doc.custom_purchase_invoice_type == "Import Service Charges" and doc.custom_import_document:
+        # Fetch the Company document to get the account
+        company = frappe.get_doc("Company", doc.company)
+        unallocated_charges_account = company.custom_unallocated_import_charges_account
+
+        if not unallocated_charges_account:
+            frappe.throw("Please set 'Unallocated Import Charges Account' in Company settings.")
+
+        # Update expense head in items
+        for item in doc.items:
+            #frappe.log_error(message=f"Unallocated Import Account is {unallocated_charges_account}",title="Unalloacated issue")
+            item.expense_account = unallocated_charges_account
+
+        # Indicate that the document has been modified
+        doc.flags.ignore_validate_update_after_submit = True
+
+
 def update_data_in_import_doc(import_doc_name):
     doc = frappe.get_doc("ImportDoc",import_doc_name)
     doc.items = []
