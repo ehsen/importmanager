@@ -14,6 +14,7 @@ def create_charge_allocation_gl(posting_date, charges, reference_doc_name):
     :param charges: Total allocated charges.
     :param reference_doc_name: The name of the Sales Invoice (reference for the GL).
     """
+    print(f"Hitting Charge allocation GL")
     # Fetch the Company linked to the Sales Invoice
     company = frappe.get_doc("Sales Invoice", reference_doc_name).company
 
@@ -56,6 +57,7 @@ def create_charge_allocation_gl(posting_date, charges, reference_doc_name):
         }
     ]
 
+    print(f"accounts are {accounts}")
     #TODO: Add assertion here that debit and credits are equal or use erpnext default function
 
     # Call the function to create GL entries
@@ -76,7 +78,7 @@ def update_allocated_charges(sales_invoice_name, item_code, charges):
     :param item_code: The item code for which allocated charges need to be updated.
     :param charges: The charge amount to update.
     """
-    print(f"allocated charges are {charges}")
+    
     try:
         # Update the allocated_charges field
         frappe.db.set_value(
@@ -85,14 +87,14 @@ def update_allocated_charges(sales_invoice_name, item_code, charges):
             "custom_allocated_charges",
             charges
         )
-        frappe.db.commit()
-        frappe.msgprint(f"Allocated charges updated for Item: {item_code} in Sales Invoice: {sales_invoice_name}.")
+        #frappe.db.commit()
+        
     except Exception as e:
         frappe.log_error(message=str(e), title="Error Updating Allocated Charges")
         frappe.throw(f"Could not update allocated charges for Item: {item_code}. Error: {str(e)}")
 
 
-def create_charge_allocation_entry(entry_type, item_code, qty, charges, reference_doc,reference_doc_name):
+def create_charge_allocation_entry(entry_type, charge_type,item_code, qty, charges, reference_doc,reference_doc_name):
     """
     Creates an entry in the Charge Allocation Ledger.
     
@@ -110,6 +112,7 @@ def create_charge_allocation_entry(entry_type, item_code, qty, charges, referenc
         frappe.get_doc({
             "doctype": "Charge Allocation Ledger",
             "entry_type": entry_type,
+            "charge_type":charge_type,
             "posting_date": nowdate(),
             "posting_time": nowtime(),
             "posting_datetime": f"{nowdate()} {nowtime()}",
@@ -119,6 +122,7 @@ def create_charge_allocation_entry(entry_type, item_code, qty, charges, referenc
             "remaining_qty": qty,
             "remaining_charges": charges,
             "reference_doc": reference_doc,
+            "reference_doc_name":reference_doc_name
         }).insert(ignore_permissions=True)
 
     # Handle 'Allocation' entry
@@ -128,7 +132,7 @@ def create_charge_allocation_entry(entry_type, item_code, qty, charges, referenc
             "Charge Allocation Ledger",
             filters={
                 "entry_type": "Addition",
-                "item_code": item_code,
+                "item_code": '01',
                 "remaining_qty": [">", 0]
             },
             fields=["name", "remaining_qty", "remaining_charges"],
@@ -150,6 +154,7 @@ def create_charge_allocation_entry(entry_type, item_code, qty, charges, referenc
 
             # Calculate allocation from this source
             allocatable_qty = min(source_doc.remaining_qty, qty - allocated_qty)
+            print(f"allocatable qty is {allocatable_qty}")
             charges_per_unit = source_doc.remaining_charges / source_doc.remaining_qty
             allocatable_charges = flt(charges_per_unit * allocatable_qty)
 
@@ -161,7 +166,7 @@ def create_charge_allocation_entry(entry_type, item_code, qty, charges, referenc
             # Update cumulative allocation
             allocated_qty += allocatable_qty
             allocated_charges += allocatable_charges
-
+            print(f"allocated charges are {allocated_charges}")
         # Validate final allocation
         if allocated_qty < qty:
             frappe.throw(f"Insufficient quantity to allocate {qty} for item {item_code}.")
@@ -182,7 +187,7 @@ def create_charge_allocation_entry(entry_type, item_code, qty, charges, referenc
         }).insert(ignore_permissions=True)
 
         # Update the Sales Invoice Item
-    update_allocated_charges(reference_doc_name, item_code, charges) 
+        update_allocated_charges(reference_doc_name, item_code, allocated_charges) 
         
 
 def create_line_wise_charge_entry(import_doc):
@@ -217,6 +222,8 @@ def on_submit_create_allocation_entries(doc, method):
                 reference_doc_name=doc.name
             
             )
+            frappe.log_error(message=f"Allocation Amount is {item.custom_allocated_charges}",title="Allocation Amount GL ISSUe")  
+            create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_allocated_charges, reference_doc_name=doc.name)
         except Exception as e:
             # Log errors to avoid stopping the on_submit process
             frappe.log_error(message=str(e), title="Charge Allocation Error")
@@ -225,7 +232,7 @@ def on_submit_create_allocation_entries(doc, method):
                 alert=True
             )
         
-            create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_allocated_charges, reference_doc_name=doc.name)
+            #create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_allocated_charges, reference_doc_name=doc.name)
     
     
 
