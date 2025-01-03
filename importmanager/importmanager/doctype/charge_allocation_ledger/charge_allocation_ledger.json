@@ -5,6 +5,7 @@
  "engine": "InnoDB",
  "field_order": [
   "entry_type",
+  "charge_type",
   "posting_date",
   "posting_time",
   "posting_datetime",
@@ -92,11 +93,17 @@
    "fieldname": "reference_doc_name",
    "fieldtype": "Data",
    "label": "Reference Doc Name"
+  },
+  {
+   "fieldname": "charge_type",
+   "fieldtype": "Select",
+   "label": "Charge Type",
+   "options": "Import Charges\nAssessment Variance"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-12-29 14:38:31.170303",
+ "modified": "2025-01-03 17:10:57.222445",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "Charge Allocation Ledger",
