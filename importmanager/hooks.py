@@ -141,6 +141,9 @@ override_doctype_class = {
 doc_events = {
 	"Sales Invoice": {
 		"on_submit": "importmanager.importmanager.controllers.charge_allocation_controller.on_submit_create_allocation_entries",
+	},
+    "Purchase Invoice": {
+		"on_update": "importmanager.import_utils.set_expense_head",
 	}
 }
 
