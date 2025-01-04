@@ -16,7 +16,9 @@
   "remaining_qty",
   "remaining_charges",
   "reference_doc",
-  "reference_doc_name"
+  "reference_doc_name",
+  "source_references",
+  "is_cancelled"
  ],
  "fields": [
   {
@@ -99,11 +101,23 @@
    "fieldtype": "Select",
    "label": "Charge Type",
    "options": "Import Charges\nAssessment Variance"
+  },
+  {
+   "fieldname": "source_references",
+   "fieldtype": "Table",
+   "label": "Source References",
+   "options": "Charge Allocation Source"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_cancelled",
+   "fieldtype": "Check",
+   "label": "Is Cancelled"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-01-03 17:10:57.222445",
+ "modified": "2025-01-04 13:44:06.011728",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "Charge Allocation Ledger",
