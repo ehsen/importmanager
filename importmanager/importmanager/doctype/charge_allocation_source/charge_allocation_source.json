@@ -1,0 +1,49 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-01-04 13:39:50.440192",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "source_entry",
+  "allocated_qty",
+  "allocated_charges",
+  "charge_type"
+ ],
+ "fields": [
+  {
+   "fieldname": "source_entry",
+   "fieldtype": "Link",
+   "label": "Source Entry",
+   "options": "Charge Allocation Ledger"
+  },
+  {
+   "default": "0",
+   "fieldname": "allocated_qty",
+   "fieldtype": "Float",
+   "label": "Allocated Qty"
+  },
+  {
+   "fieldname": "allocated_charges",
+   "fieldtype": "Float",
+   "label": "Allocated Charges"
+  },
+  {
+   "fieldname": "charge_type",
+   "fieldtype": "Data",
+   "label": "Charge Type"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-01-04 13:44:00.969949",
+ "modified_by": "Administrator",
+ "module": "Importmanager",
+ "name": "Charge Allocation Source",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
