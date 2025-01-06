@@ -494,6 +494,125 @@ def on_submit_import_doc(doc, method):
             )
 
 
+def repost_import_charges(import_doc_name, item_code, new_charges):
+    """
+    Handles changes in allocated_charges_ex_cd after ImportDoc submission.
+    Creates new allocation entries based on the difference in charges.
+    
+    :param import_doc_name: Name of the ImportDoc
+    :param item_code: Item code for which charges are being adjusted
+    :param new_charges: New total charges amount
+    """
+    # Get original Addition entry
+    original_addition = frappe.get_all(
+        "Charge Allocation Ledger",
+        filters={
+            "reference_doc": "ImportDoc",
+            "reference_doc_name": import_doc_name,
+            "item_code": item_code,
+            "entry_type": "Addition",
+            "charge_type": "Import Charges",
+            "is_cancelled": 0
+        },
+        fields=["name", "charges", "qty"],
+        limit=1
+    )
+
+    if not original_addition:
+        frappe.throw(f"No original Addition entry found for {item_code} in ImportDoc {import_doc_name}")
+
+    original_entry = original_addition[0]
+    charge_difference = new_charges - original_entry.charges
+
+    if charge_difference <= 0:
+        # If there is no increase in charges, no action is needed
+        return
+
+    # Create a new Addition entry for the increased charges
+    create_charge_allocation_entry(
+        entry_type="Addition",
+        charge_type="Import Charges",
+        item_code=item_code,
+        qty=original_entry.qty,
+        charges=charge_difference,
+        reference_doc="ImportDoc",
+        reference_doc_name=import_doc_name
+    )
+
+    # Get all allocation entries that have this Addition entry as a source
+    allocation_entries = frappe.get_all(
+        "Charge Allocation Ledger",
+        filters={
+            "entry_type": "Allocation",
+            "charge_type": "Import Charges",
+            "is_cancelled": 0
+        },
+        fields=["name"]
+    )
+
+    # Filter allocations that use our specific Addition entry as source
+    existing_allocations = []
+    for alloc in allocation_entries:
+        allocation_doc = frappe.get_doc("Charge Allocation Ledger", alloc.name)
+        for source_ref in allocation_doc.source_references:
+            if source_ref.source_entry == original_addition[0].name:
+                existing_allocations.append({
+                    "name": allocation_doc.name,
+                    "qty": source_ref.allocated_qty,
+                    "charges": source_ref.allocated_charges,
+                    "reference_doc": allocation_doc.reference_doc,
+                    "reference_doc_name": allocation_doc.reference_doc_name,
+                    "source_reference": source_ref
+                })
+                break
+
+    if not existing_allocations:
+        # If no allocations exist, we are done after creating the addition entry
+        return
+
+    # Use the original quantity from the ImportDoc for calculating additional charge per unit
+    total_original_qty = original_entry.qty  # This is the original quantity from the Addition entry
+
+    # Calculate the additional charge per unit
+    additional_charge_per_unit = charge_difference / total_original_qty if total_original_qty > 0 else 0
+
+    # Allocate the additional charges to existing allocations
+    for allocation in existing_allocations:
+        # Create new allocation entry for the additional charge per unit
+        create_charge_allocation_entry(
+            entry_type="Allocation",
+            charge_type="Import Charges",
+            item_code=item_code,
+            qty=allocation["qty"],
+            charges=additional_charge_per_unit * allocation["qty"],
+            reference_doc=allocation["reference_doc"],
+            reference_doc_name=allocation["reference_doc_name"]
+        )
+
+        # Update allocated charges in the reference document (e.g., Sales Invoice)
+        if allocation["reference_doc"] == "Sales Invoice":
+            current_charges = frappe.db.get_value(
+                "Sales Invoice Item",
+                {"parent": allocation["reference_doc_name"], "item_code": item_code},
+                "custom_allocated_charges"
+            ) or 0
+            
+            update_allocated_charges(
+                allocation["reference_doc_name"],
+                item_code,
+                current_charges + (additional_charge_per_unit * allocation["qty"]),
+                "Import Charges"
+            )
+
+            # Create GL entries for the additional charges
+            create_charge_allocation_gl(
+                posting_date=nowdate(),
+                charges=(additional_charge_per_unit * allocation["qty"]),
+                reference_doc_name=allocation["reference_doc_name"],
+                charge_type="Import Charges"
+            )
+
+
 
     
     
