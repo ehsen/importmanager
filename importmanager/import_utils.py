@@ -1,6 +1,7 @@
 import frappe
 from frappe.utils import nowdate
 from erpnext import get_default_cost_center
+from erpnext.controllers.taxes_and_totals import get_itemised_tax_breakup_data
 
 def create_journal_voucher(title, posting_date, accounts,import_document=None):
     """
@@ -263,10 +264,13 @@ def update_import_charges_in_import(doc):
     for item in doc.items:
         data_dict['document_type'] = "Purchase Invoice"
         data_dict['doc_name'] = doc.name
-        data_dict['charge_item'] = item.item_name
+        #data_dict['charge_item'] = item.item_name
+        data_dict['import_charge_type'] = doc.custom_import_charge_type
         data_dict['paid_to'] = doc.supplier
-        data_dict['amount'] = item.amount
-        data_dict['purchase_invoice_item'] = item.name
+        data_dict['amount'] = doc.total
+        data_dict['total_st'] = doc.total_taxes_and_charges
+        data_dict['total_incl_tax'] = doc.rounded_total
+        #data_dict['purchase_invoice_item'] = item.name
         import_doc.append("linked_import_charges",data_dict)
     
     import_doc.save()
@@ -299,6 +303,9 @@ def get_customs_duty(import_doc_name):
     custom_duty = 0
     acd = 0
     cess = 0
+    stamnt = 0
+    ast = 0
+    it = 0
     item_wise_duty = {}
     
     for item in lcv:
@@ -307,15 +314,21 @@ def get_customs_duty(import_doc_name):
             custom_duty += lcv_item.custom_cd
             acd += lcv_item.custom_acd
             cess += lcv_item.custom_cess_amount
+            stamnt += lcv_item.custom_stamnt
+            ast += lcv_item.custom_ast
+            it += lcv_item.custom_it
             if lcv_item.item_code not in item_wise_duty:
                 item_wise_duty[lcv_item.item_code] = {'custom_duty':lcv_item.custom_cd,'acd':lcv_item.custom_acd,'cess':
-                lcv_item.custom_cess_amount}
+                lcv_item.custom_cess_amount,'stamnt':lcv_item.custom_stamnt,'ast':lcv_item.custom_ast,'it':lcv_item.custom_it}
             elif lcv_item.item_code in item_wise_duty:
                 item_wise_duty[lcv_item.item_code]['custom_duty'] += lcv_item.custom_cd
                 item_wise_duty[lcv_item.item_code]['acd'] += lcv_item.custom_acd
-                item_wise_duty[lcv_item.item_code]['cess'] += lcv_item.custom_acd
+                item_wise_duty[lcv_item.item_code]['cess'] += lcv_item.custom_cess_amount
+                item_wise_duty[lcv_item.item_code]['stamnt'] += lcv_item.custom_stamnt
+                item_wise_duty[lcv_item.item_code]['ast'] += lcv_item.custom_ast
+                item_wise_duty[lcv_item.item_code]['it'] += lcv_item.custom_it
         
-    return {'item_wise_duty':item_wise_duty,'total':{'custom_duty':custom_duty,'acd':acd,'cess':cess}}
+    return {'item_wise_duty':item_wise_duty,'total':{'custom_duty':custom_duty,'acd':acd,'cess':cess,'stamnt':stamnt,'ast':ast,'it':it}}
 
     
 def update_misc_import_charges(import_doc_name):
@@ -431,15 +444,18 @@ def calculate_total_import_charges(import_doc_name):
     import_doc = frappe.get_doc("ImportDoc",import_doc_name)
     
     total_import_charges = sum(row.amount for row in import_doc.linked_import_charges) or 0
+    total_service_sales_tax = sum(row.total_st for row in import_doc.linked_import_charges) or 0
     total_misc_import_charges = sum(row.amount for row in import_doc.linked_misc_import_charges) or 0
     total_invoices_amount = sum(row.total_base_value for row in import_doc.linked_purchase_invoices) or 0
     total_customs_duty = sum(row.amount for row in import_doc.linked_misc_import_charges if row.import_charge_type=="Customs Duty") or 0
 
-    
 
     import_doc.total_import_charges = total_import_charges + total_misc_import_charges
     import_doc.total_cost = import_doc.total_import_charges + total_invoices_amount
     import_doc.total_customs_duty = total_customs_duty
+    import_doc.sales_tax_on_services = total_service_sales_tax
+
+
     import_doc.save()
 
 def get_landed_cost_item(import_doc_name,purchase_receipt_item):
@@ -460,29 +476,43 @@ def allocate_import_charges(import_doc_name):
     # TODO: This function shoudl be optimzied the way it pulls the import charges from LCV. 
     
     import_doc = frappe.get_doc("ImportDoc",import_doc_name)
-    item_wise_total_duty = get_customs_duty(import_doc_name)['item_wise_duty']
+    import_taxes_data = get_customs_duty(import_doc_name)
+    item_wise_total_duty = import_taxes_data['item_wise_duty']
+    # Update Totals In Import Doc
+
+    import_doc.sales_tax_on_import = import_taxes_data['total']['stamnt']+import_taxes_data['total']['ast']
+    import_doc.total_income_tax = import_taxes_data['total']['it']
+    import_doc.total_import_value = import_doc.total_cost + import_doc.sales_tax_on_import+import_doc.sales_tax_on_services + import_doc.total_income_tax
+    
+    # Allocate Charges. Services Sales Tax, will distributed Proporionately to all items
     if import_doc.total_import_charges > 0:
         total_items_amount = sum(row.amount for row in import_doc.items)
         for item in import_doc.items:
             item_customs_duty = 0
+            item_sales_tax = 0
             lcv_item = get_landed_cost_item(import_doc_name,item.purchase_receipt_item)
             
 
 
             if item.item_code in item_wise_total_duty.keys():
                 item_customs_duty += (item_wise_total_duty[item.item_code]['custom_duty']+item_wise_total_duty[item.item_code]['acd'])
-
+                item_sales_tax += (item_wise_total_duty[item.item_code]['stamnt']+item_wise_total_duty[item.item_code]['ast'])
             item.allocated_charges_ex_cd = (item.amount/total_items_amount * (import_doc.total_import_charges-import_doc.total_customs_duty)) or 0
             item.allocated_import_charges = item_customs_duty + item.allocated_charges_ex_cd
             item.net_unit_cost = (item.allocated_import_charges + item.amount)/item.qty
             item.st_unit_cost = 0
+            allocated_service_sales_tax = (item.amount/total_items_amount) * import_doc.sales_tax_on_services
+
             if lcv_item is not None:
                 item.st_unit_cost += ((lcv_item.custom_base_assessed_value + item_customs_duty)/item.qty)
-            
+                item.total_unit_cost = (item.amount + item_customs_duty + allocated_service_sales_tax+item.allocated_charges_ex_cd+lcv_item.custom_it+item_sales_tax)/item.qty
 
                 
         total_allocated_charges = sum(item.allocated_import_charges for item in import_doc.items)
         assert(total_allocated_charges == import_doc.total_import_charges)
+        import_doc.sales_tax_on_import = import_taxes_data['total']['stamnt']+import_taxes_data['total']['ast']
+        import_doc.total_income_tax = import_taxes_data['total']['it']
+        import_doc.total_import_value = import_doc.total_cost + import_doc.sales_tax_on_import+import_doc.sales_tax_on_services + import_doc.total_income_tax
         import_doc.save()
 
     
