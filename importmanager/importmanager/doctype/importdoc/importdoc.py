@@ -3,10 +3,13 @@
 
 import frappe
 from frappe.model.document import Document
+from importmanager.import_utils import update_data_in_import_doc
 
 
 class ImportDoc(Document):
-	pass
+	def onload(self):
+		if self.name != None:
+			update_data_in_import_doc(self.name)
 
 
 	def fetch_linked_invoices(self):

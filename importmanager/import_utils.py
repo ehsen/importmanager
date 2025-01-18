@@ -389,7 +389,7 @@ def update_unallocated_misc_charges_jv(import_doc_name):
     )
     
     if not journal_entries:
-        frappe.msgprint(f"No submitted Journal Entries found for ImportDoc {import_doc_name}.")
+        #frappe.msgprint(f"No submitted Journal Entries found for ImportDoc {import_doc_name}.")
         return
 
     # Process each Journal Entry and update misc import charges
@@ -414,7 +414,7 @@ def update_unallocated_misc_charges_jv(import_doc_name):
 
     # Save the updated ImportDoc
     import_doc.save()
-    frappe.msgprint(f"Misc import charges updated for ImportDoc {import_doc_name}.")
+    #frappe.msgprint(f"Misc import charges updated for ImportDoc {import_doc_name}.")
 
 
 
