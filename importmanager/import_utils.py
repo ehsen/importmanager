@@ -81,7 +81,7 @@ def create_gl_entries(posting_date, accounts, company):
         gl_entry.voucher_type = acc.get("voucher_type",None)
         gl_entry.voucher_no = acc.get("voucher_no",None)
         gl_entry.voucher_subtype = acc.get("voucher_subtype",None)
-        gl_entry.against = acc.get("account",None)
+        gl_entry.against = acc.get("against",None)
 
         # Insert GL Entry one by one (instead of bulk insert)
         try:
