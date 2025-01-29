@@ -70,14 +70,14 @@ app_license = "mit"
 # automatically create page for each record of this doctype
 # website_generators = ["Web Page"]
 
-# Jinja
+#Jinja
 # ----------
 
 # add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "importmanager.utils.jinja_methods",
+jinja = {
+	"methods": "importmanager.import_print_utils.fetch_jpg_from_charge_allocation",
 # 	"filters": "importmanager.utils.jinja_filters"
-# }
+}
 
 # Installation
 # ------------
