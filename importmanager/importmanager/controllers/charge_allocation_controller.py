@@ -138,105 +138,10 @@ def update_allocated_charges(sales_invoice_name, item_code, charges,charge_type)
         raise
 
 
-def create_charge_allocation_entry_new(entry_type, charge_type,item_code, qty, charges, reference_doc,reference_doc_name):
-    """
-    Creates an entry in the Charge Allocation Ledger.
-    
-    :param entry_type: 'Addition' or 'Allocation'.
-    :param item_code: Item for which the entry is being made.
-    :param qty: Quantity involved.
-    :param charges: Charges to be added/allocated.
-    :param reference_doc: Reference document causing the ledger update.
-    """
-    if entry_type not in ["Addition", "Allocation"]:
-        frappe.throw("Invalid entry type. Must be 'Addition' or 'Allocation'.")
-
-    # Handle 'Addition' entry
-    if entry_type == "Addition":
-        frappe.get_doc({
-            "doctype": "Charge Allocation Ledger",
-            "entry_type": entry_type,
-            "charge_type":charge_type,
-            "posting_date": nowdate(),
-            "posting_time": nowtime(),
-            "posting_datetime": f"{nowdate()} {nowtime()}",
-            "item_code": item_code,
-            "qty": qty,
-            "charges": charges,
-            "remaining_qty": qty,
-            "remaining_charges": charges,
-            "reference_doc": reference_doc,
-            "reference_doc_name":reference_doc_name
-        }).insert(ignore_permissions=True)
-
-    # Handle 'Allocation' entry
-    elif entry_type == "Allocation":
-        # Fetch the latest 'Addition' entry for the item
-        allocation_sources = frappe.get_all(
-            "Charge Allocation Ledger",
-            filters={
-                "entry_type": "Addition",
-                "charge_type":charge_type,
-                "item_code": item_code,
-                "remaining_qty": [">", 0]
-            },
-            fields=["name", "remaining_qty", "remaining_charges"],
-            order_by="posting_datetime asc"  # Use FIFO method
-        )
-
-        if not allocation_sources:
-            frappe.throw(f"No remaining charges to allocate for item {item_code}.")
-
-        allocated_qty = 0
-        allocated_charges = 0
-
-        # Allocate charges from multiple sources if necessary
-        for source in allocation_sources:
-            if allocated_qty >= qty:
-                break
-
-            source_doc = frappe.get_doc("Charge Allocation Ledger", source["name"])
-
-            # Calculate allocation from this source
-            allocatable_qty = min(source_doc.remaining_qty, qty - allocated_qty)
-            print(f"allocatable qty is {allocatable_qty}")
-            charges_per_unit = source_doc.remaining_charges / source_doc.remaining_qty
-            allocatable_charges = flt(charges_per_unit * allocatable_qty)
-
-            # Update the source entry
-            source_doc.remaining_qty -= allocatable_qty
-            source_doc.remaining_charges -= allocatable_charges
-            source_doc.save()
-
-            # Update cumulative allocation
-            allocated_qty += allocatable_qty
-            allocated_charges += allocatable_charges
-            print(f"allocated charges are {allocated_charges}")
-        # Validate final allocation
-        if allocated_qty < qty:
-            frappe.throw(f"Insufficient quantity to allocate {qty} for item {item_code}.")
 
         
-        # Create a new Allocation entry
-        frappe.get_doc({
-            "doctype": "Charge Allocation Ledger",
-            "entry_type": entry_type,
-            "chage_type":charge_type,
-            "posting_date": nowdate(),
-            "posting_time": nowtime(),
-            "posting_datetime": f"{nowdate()} {nowtime()}",
-            "item_code": item_code,
-            "qty": allocated_qty,
-            "charges": allocated_charges,
-            "reference_doc": reference_doc,
-            "reference_doc_name":reference_doc_name
-        }).insert(ignore_permissions=True)
 
-        # Update the Sales Invoice Item
-        update_allocated_charges(reference_doc_name, item_code, allocated_charges,charge_type) 
-        
-
-def create_charge_allocation_entry(entry_type, charge_type, item_code, qty, charges, reference_doc, reference_doc_name):
+def create_charge_allocation_entry_backup(entry_type, charge_type, item_code, qty, charges, reference_doc, reference_doc_name):
     """
     Creates an entry in the Charge Allocation Ledger.
 
@@ -293,14 +198,14 @@ def create_charge_allocation_entry(entry_type, charge_type, item_code, qty, char
         allocated_charges = 0
         source_references = []
 
-        
+        print(f"Allocation sources are {allocation_sources}")
         for source in allocation_sources:
-           
+            print(f"Current Source is {source}")
             if allocated_qty >= qty:
                 break
             
             allocatable_qty = min(source["remaining_qty"], qty - allocated_qty)
-            
+            print(f"allocatable_qty is {allocatable_qty} qty = {qty} allocated_qty={allocated_qty}")
             charges_per_unit = source["remaining_charges"] / source["remaining_qty"]
             allocatable_charges = flt(charges_per_unit * allocatable_qty)
             source_references.append({
@@ -376,6 +281,193 @@ def cancel_allocation(reference_doc_name):
                 source_doc.save()
 
 
+def get_last_allocation(item_code,charge_type):
+    last_allocation_entry = frappe.get_all(
+            "Charge Allocation Ledger",
+            filters={
+                "entry_type": "Allocation",
+                "charge_type":charge_type,
+                "item_code": item_code,
+                "is_cancelled": 0
+            },
+            order_by="posting_datetime desc",
+            limit=1,
+            fields=["charges", "qty", "source_references"]
+        )
+
+
+
+def create_charge_allocation_entry(entry_type, charge_type, item_code, qty, charges, reference_doc, reference_doc_name):
+    """
+    Creates an entry in the Charge Allocation Ledger.
+
+    :param entry_type: 'Addition', 'Allocation', or 'Return'.
+    :param charge_type: Type of charge ('Import' or 'Assessment').
+    :param item_code: Item for which the entry is being made.
+    :param qty: Quantity involved.
+    :param charges: Charges to be added/allocated.
+    :param reference_doc: Reference document causing the ledger update.
+    :param reference_doc_name: Reference document name.
+    """
+    print('called allocation function')
+
+    print(f"entry type is {entry_type}")
+    if entry_type not in ["Addition", "Allocation", "Return"]:
+        frappe.throw("Invalid entry type. Must be 'Addition', 'Allocation', or 'Return'.")
+
+    if entry_type == "Return":
+        # Fetch the last Allocation entry for the same item code
+        last_allocation_entry = frappe.get_all(
+            "Charge Allocation Ledger",
+            filters={
+                "entry_type": "Allocation",
+                "charge_type":charge_type,
+                "item_code": item_code,
+                "is_cancelled": 0
+            },
+            order_by="posting_datetime desc",
+            limit=1,
+            fields=["name","charges", "qty", "source_references"]
+        )
+
+        if not last_allocation_entry:
+            print(f"no allocation entry foud for {charge_type}")
+            frappe.throw(f"No previous allocation entry found for item {item_code}.")
+
+        last_entry = last_allocation_entry[0]
+        print(f"Last allocation entry is {last_entry}")
+        last_entry = frappe.get_doc("Charge Allocation Ledger",last_entry['name'])
+        print(f"last entry references is {last_entry.source_references}")
+        per_unit_charge = last_entry.charges / last_entry.qty if last_entry.qty > 0 else 0
+        print(f"per unit charge is {per_unit_charge}")
+        total_return_charges = per_unit_charge * qty
+
+        # Handle 'Return' entry
+        frappe.get_doc({
+            "doctype": "Charge Allocation Ledger",
+            "entry_type": entry_type,
+            "charge_type": charge_type,
+            "posting_date": nowdate(),
+            "posting_time": nowtime(),
+            "posting_datetime": f"{nowdate()} {nowtime()}",
+            "item_code": item_code,
+            "qty": qty,  # Negative quantity for return
+            "charges": total_return_charges,  # Negative charges for return
+            "reference_doc": reference_doc,
+            "reference_doc_name": reference_doc_name
+        }).insert(ignore_permissions=True)
+
+        # Update the Sales Invoice Item for return
+        update_allocated_charges(reference_doc_name, item_code, -total_return_charges, charge_type)  # Deduct charges
+
+        # Increase the source document's remaining quantity and charges
+        if len(last_entry.source_references)>0:
+            
+            
+            # Get the first source reference
+            source_reference = last_entry.source_references[0]
+            
+            source_doc = frappe.get_doc("Charge Allocation Ledger", source_reference.source_entry)
+            source_doc.remaining_qty += abs(qty)  # Increase remaining quantity
+            source_doc.remaining_charges += abs(total_return_charges)  # Increase remaining charges
+            source_doc.save()
+        else:
+            frappe.log_error(message=f"No source references found in the last allocation entry for item {item_code}.", title="Return Allocation Warning")
+
+    elif entry_type == "Addition":
+        # Existing logic for Addition
+        frappe.get_doc({
+            "doctype": "Charge Allocation Ledger",
+            "entry_type": entry_type,
+            "charge_type": charge_type,
+            "posting_date": nowdate(),
+            "posting_time": nowtime(),
+            "posting_datetime": f"{nowdate()} {nowtime()}",
+            "item_code": item_code,
+            "qty": qty,
+            "charges": charges,
+            "remaining_qty": qty,
+            "remaining_charges": charges,
+            "reference_doc": reference_doc,
+            "reference_doc_name": reference_doc_name
+        }).insert(ignore_permissions=True)
+
+    elif entry_type == "Allocation":
+        # Existing logic for Allocation
+        print("allocation section called")
+        # Fetch non-canceled allocation sources
+        allocation_sources = frappe.get_all(
+            "Charge Allocation Ledger",
+            filters={
+                "entry_type": "Addition",
+                "charge_type": charge_type,
+                "item_code": item_code,
+                "remaining_qty": [">", 0],
+                "is_cancelled": 0
+            },
+            fields=["name", "remaining_qty", "remaining_charges"],
+            order_by="posting_datetime asc"
+        )
+    
+        if not allocation_sources:
+            pass # Most likely all allocated charges are exhausted now.
+
+        allocated_qty = 0
+        allocated_charges = 0
+        source_references = []
+
+        print(f"Allocation sources are {allocation_sources}")
+        for source in allocation_sources:
+            print(f"Current Source is {source}")
+            if allocated_qty >= qty:
+                break
+            
+            allocatable_qty = min(source["remaining_qty"], qty - allocated_qty)
+            print(f"allocatable_qty is {allocatable_qty} qty = {qty} allocated_qty={allocated_qty}")
+            charges_per_unit = source["remaining_charges"] / source["remaining_qty"]
+            allocatable_charges = flt(charges_per_unit * allocatable_qty)
+            source_references.append({
+                "source_entry": source["name"],
+                "allocated_qty": allocatable_qty,
+                "allocated_charges": allocatable_charges,
+                "charge_type": charge_type
+            })
+
+            allocated_qty += allocatable_qty
+            allocated_charges += allocatable_charges
+
+        if allocated_qty < qty:
+            frappe.throw(f"Insufficient quantity to allocate {qty} for item {item_code}.")
+
+        # Create Allocation Entry
+        allocation_entry = frappe.get_doc({
+            "doctype": "Charge Allocation Ledger",
+            "entry_type": entry_type,
+            "charge_type": charge_type,
+            "posting_date": nowdate(),
+            "posting_time": nowtime(),
+            "posting_datetime": f"{nowdate()} {nowtime()}",
+            "item_code": item_code,
+            "qty": allocated_qty,
+            "charges": allocated_charges,
+            "source_references": source_references,  # Storing source references
+            "reference_doc": reference_doc,
+            "reference_doc_name": reference_doc_name,
+            "is_cancelled": 0
+        })
+        allocation_entry.insert(ignore_permissions=True)
+
+        # Mark allocation for cancellation if needed
+        for source_ref in source_references:
+            source_doc = frappe.get_doc("Charge Allocation Ledger", source_ref["source_entry"])
+            source_doc.remaining_qty -= source_ref["allocated_qty"]
+            source_doc.remaining_charges -= source_ref["allocated_charges"]
+            source_doc.save()
+
+        print("going to update sales invoice")
+        # Update the Sales Invoice Item
+        update_allocated_charges(reference_doc_name, item_code, allocated_charges, charge_type)
+
 def create_line_wise_charge_entry(import_doc):
     # This will loop over all ImportDoc Items and create Charge Entries
     
@@ -396,11 +488,15 @@ def on_submit_create_allocation_entries(doc, method):
     :param doc: The Sales Invoice document that triggered the hook.
     :param method: The method triggering the hook (standard Frappe hook parameter).
     """
+    entry_type = "Allocation"
+    if doc.is_return == 1:
+        entry_type = "Return"
     for item in doc.items:
         try:
             # Call the create_charge_allocation_entry function
+            print("Creating Import Charges entry *************")
             create_charge_allocation_entry(
-                entry_type="Allocation",
+                entry_type=entry_type,
                 charge_type="Import Charges",
                 item_code=item.item_code,
                 qty=item.qty,
@@ -410,12 +506,13 @@ def on_submit_create_allocation_entries(doc, method):
             
             )
             frappe.log_error(message=f"Allocation Amount is {item.custom_allocated_charges}",title="Allocation Amount GL ISSUe")  
-            create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_allocated_charges, reference_doc_name=doc.name,charge_type="Import Charges")
+            #TODO: Disabled Temporarily create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_allocated_charges, reference_doc_name=doc.name,charge_type="Import Charges")
             
             # Create Assessment Variance Entry
             # Call the create_charge_allocation_entry function
+            print("Creating assessment variance entry")
             create_charge_allocation_entry(
-                entry_type="Allocation",
+                entry_type=entry_type,
                 charge_type="Assessment Variance",
                 item_code=item.item_code,
                 qty=item.qty,
@@ -426,7 +523,7 @@ def on_submit_create_allocation_entries(doc, method):
             
             )
             frappe.log_error(message=f"Import Assessment Amount is {item.custom_assessment_charges}",title="Assessment Variance GL ISSUe")  
-            create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_assessment_charges, reference_doc_name=doc.name,charge_type="Assessment Variance")
+            #create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_assessment_charges, reference_doc_name=doc.name,charge_type="Assessment Variance")
             
         except Exception as e:
             # Log errors to avoid stopping the on_submit process
@@ -436,7 +533,7 @@ def on_submit_create_allocation_entries(doc, method):
                 alert=True
             )
         
-            #create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_allocated_charges, reference_doc_name=doc.name)
+            #TODO: disabled temporarily create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_allocated_charges, reference_doc_name=doc.name)
 
 
 def on_submit_import_doc(doc, method):
