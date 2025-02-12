@@ -9,7 +9,8 @@ from importmanager.import_utils import update_data_in_import_doc
 class ImportDoc(Document):
 	def onload(self):
 		if self.name != None:
-			update_data_in_import_doc(self.name)
+			#update_data_in_import_doc(self.name)
+			pass
 
 
 	def fetch_linked_invoices(self):
