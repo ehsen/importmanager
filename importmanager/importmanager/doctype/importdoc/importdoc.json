@@ -12,6 +12,7 @@
   "naming_series",
   "column_break_5ski",
   "bl_no",
+  "lc_no",
   "column_break_nz56",
   "gd_no",
   "column_break_hatu",
@@ -33,6 +34,7 @@
   "section_break_uoae",
   "item_wise_costing_tab",
   "items",
+  "status",
   "amended_from"
  ],
  "fields": [
@@ -208,12 +210,24 @@
    "fieldtype": "Select",
    "label": "Naming Series",
    "options": "{linked_purchase_order}"
+  },
+  {
+   "fieldname": "lc_no",
+   "fieldtype": "Data",
+   "label": "LC No"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Status",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-02-12 12:16:02.827981",
+ "modified": "2025-02-17 15:48:57.066926",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "ImportDoc",

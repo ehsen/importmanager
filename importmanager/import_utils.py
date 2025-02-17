@@ -561,6 +561,51 @@ def update_data_in_import_doc(import_doc_name):
 
 
 
+def generate_outstanding_payments_report():
+    # Fetch all ImportDoc documents where status is not "Locked"
+    import_docs = frappe.get_list("ImportDoc", filters={"status": ["!=", "Locked"]}, fields=["name"])
+
+    report_data = []  # Initialize a list to hold all report rows
+
+    for doc in import_docs:
+        import_doc = frappe.get_doc("ImportDoc", doc.name)
+
+        # Calculate Open Expenses
+        open_exps = sum(row.amount for row in import_doc.linked_misc_import_charges) or 0
+
+        # Calculate Other Expenses
+        other_exp = sum(row.total_st for row in import_doc.linked_import_charges) or 0
+
+        # Calculate LC Total
+        lc_total = sum(row.total_value for row in import_doc.linked_purchase_invoices) or 0
+
+        # Concatenate item names into a single string
+        item_names = ", ".join(item.item_name for item in import_doc.items)
+
+        # Prepare the report row
+        report_row = {
+            "ImportDoc": import_doc.name,
+            "Items": item_names,
+            "LC No.": import_doc.lc_no,
+            "Margin": None,  # Ignored for now
+            "Open Exps": open_exps,
+            "L/CFORM": None,  # Ignored for now
+            "AMD": None,  # Ignored for now
+            "Other Exp": other_exp,
+            "B.BILL": None,  # Ignored for now
+            "Shipment": None,  # Ignored for now
+            "Expiry": None,  # Ignored for now
+            "LC Total": lc_total
+        }
+
+        report_data.append(report_row)  # Add the report row to the list
+
+    return report_data  # Return the complete report data
+
+
+
+
+
 
 
 
