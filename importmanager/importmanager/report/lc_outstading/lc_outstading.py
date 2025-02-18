@@ -23,13 +23,16 @@ def generate_outstanding_payments_report():
             except Exception as e:
                 frappe.log_error(f"Error fetching Purchase Order: {str(e)}", "Purchase Order Retrieval Error")
         # Calculate Open Expenses
-        open_exps = sum(row.amount for row in import_doc.linked_misc_import_charges) or 0
+        linked_misc_import_charges = sum(row.amount for row in import_doc.linked_misc_import_charges) or 0
 
         # Calculate Other Expenses
-        other_exp = sum(row.total_st for row in import_doc.linked_import_charges) or 0
+        linked_import_charges = sum(row.total_incl_tax for row in import_doc.linked_import_charges) or 0
 
         # Calculate LC Total
-        lc_total = sum(row.total_value for row in import_doc.linked_purchase_invoices) or 0
+        lc_amount = sum(row.total_value for row in import_doc.linked_purchase_invoices) or 0
+
+        total_lc_outstanding = linked_misc_import_charges + linked_import_charges
+        #frappe.log_error(f"Total LC Outstanding for {linked_misc_import_charges} {linked_import_charges}: {total_lc_outstanding}", "Debug Info")
 
         # Concatenate item names into a single string
         item_names = ", ".join(item.item_name for item in import_doc.items)
@@ -40,14 +43,11 @@ def generate_outstanding_payments_report():
             "Items": item_names,
             "LC No.": import_doc.lc_no,
             "Margin": None,  # Ignored for now
-            "Open Exps": open_exps,
-            "L/CFORM": None,  # Ignored for now
-            "AMD": None,  # Ignored for now
-            "Other Exp": other_exp,
-            "B.BILL": None,  # Ignored for now
-            "Shipment": None,  # Ignored for now
-            "Expiry": None,  # Ignored for now
-            "LC Total": lc_total,
+            "Misc Import Charges": linked_misc_import_charges,
+            "Service Invoie Charges": linked_import_charges,
+            "Duties and Taxes":0,
+            "Total Outstanding Expenses":total_lc_outstanding,
+            "LC Amount": lc_amount,
              "Currency": currency,
         }
 
@@ -59,18 +59,17 @@ def generate_outstanding_payments_report():
 def execute(filters=None):
     # Define the columns for the report
     columns = [
-        {"label": "ImportDoc", "fieldname": "ImportDoc", "fieldtype": "Data", "width": 150},
-        {"label": "Items", "fieldname": "Items", "fieldtype": "Data", "width": 300},
+        {"label": "ImportDoc", "fieldname": "ImportDoc", "fieldtype": "Data", "width": 100},
+        {"label": "Items", "fieldname": "Items", "fieldtype": "Data", "width": 200},
         {"label": "LC No.", "fieldname": "LC No.", "fieldtype": "Data", "width": 100},
         {"label": "Margin", "fieldname": "Margin", "fieldtype": "Data", "width": 100},
-        {"label": "Open Exps", "fieldname": "Open Exps", "fieldtype": "Currency", "width": 100},
-        {"label": "L/CFORM", "fieldname": "L/CFORM", "fieldtype": "Data", "width": 100},
-        {"label": "AMD", "fieldname": "AMD", "fieldtype": "Data", "width": 100},
-        {"label": "Other Exp", "fieldname": "Other Exp", "fieldtype": "Currency", "width": 100},
-        {"label": "B.BILL", "fieldname": "B.BILL", "fieldtype": "Data", "width": 100},
-        {"label": "Shipment", "fieldname": "Shipment", "fieldtype": "Data", "width": 100},
-        {"label": "Expiry", "fieldname": "Expiry", "fieldtype": "Data", "width": 100},
-        {"label": "LC Total", "fieldname": "LC Total", "fieldtype": "Float", "width": 100},
+        {"label": "Misc Import Charges", "fieldname": "Misc Import Charges", "fieldtype": "Currency", "width": 200},
+        {"label": "Service Invoie Charges", "fieldname": "Service Invoie Charges", "fieldtype": "Currency", "width": 200},
+        {"label": "Duties and Taxes", "fieldname": "Duties and Taxes", "fieldtype": "Float", "width": 200},
+
+        {"label": "Total Outstanding Expenses", "fieldname": "Total Outstanding Expenses", "fieldtype": "Float", "width": 200},
+
+        {"label": "LC Amount", "fieldname": "LC Amount", "fieldtype": "Float", "width": 100},
         {"label": "Currency", "fieldname": "Currency", "fieldtype": "Data", "width": 100},  # Add currency column
 
     ]
