@@ -79,6 +79,14 @@ jinja = {
 # 	"filters": "importmanager.utils.jinja_filters"
 }
 
+fixtures = [
+    {
+        "dt": "Import Charge Type",  # Export all custom fields
+        "filters": []
+    }
+
+]
+
 # Installation
 # ------------
 
