@@ -604,6 +604,41 @@ def generate_outstanding_payments_report():
 
 
 
+def on_submit_purchase_invoice(doc, method):
+    """
+    Hook for Purchase Invoice on_submit event.
+    Updates the import doc data if custom_import_document is set.
+    """
+    if doc.custom_import_document:
+        update_data_in_import_doc(doc.custom_import_document)
+
+def on_cancel_purchase_invoice(doc, method):
+    """
+    Hook for Purchase Invoice on_cancel event.
+    Updates the import doc data if custom_import_document is set.
+    """
+    if doc.custom_import_document:
+        update_data_in_import_doc(doc.custom_import_document)
+
+def on_submit_journal_entry(doc, method):
+    """
+    Hook for Journal Entry on_submit event.
+    Updates the import doc data if custom_import_document is set.
+    """
+    if doc.custom_import_document:
+        update_data_in_import_doc(doc.custom_import_document)
+
+def on_cancel_journal_entry(doc, method):
+    """
+    Hook for Journal Entry on_cancel event.
+    Updates the import doc data if custom_import_document is set.
+    """
+    if doc.custom_import_document:
+        update_data_in_import_doc(doc.custom_import_document)
+
+
+
+
 
 
 
