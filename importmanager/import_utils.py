@@ -2,6 +2,7 @@ import frappe
 from frappe.utils import nowdate
 from erpnext import get_default_cost_center
 from erpnext.controllers.taxes_and_totals import get_itemised_tax_breakup_data
+import time
 
 def create_journal_voucher(title, posting_date, accounts,import_document=None):
     """
@@ -542,19 +543,54 @@ def set_expense_head(doc, method):
         # Indicate that the document has been modified
         doc.flags.ignore_validate_update_after_submit = True
 
+def update_purchase_invoices(import_doc_name):
+    """
+    Update the ImportDoc's linked_purchase_invoices table with related Purchase Invoices.
+    Only includes Purchase Invoices that are submitted and of type 'Import'.
+
+    :param import_doc_name: Name of the ImportDoc to update
+    """
+    # Get list of submitted Import Purchase Invoices linked to this ImportDoc
+    linked_pi = frappe.get_list("Purchase Invoice",
+        filters={
+            'docstatus': 1,
+            'custom_purchase_invoice_type': 'Import',
+            'custom_import_document': import_doc_name
+        },
+        fields=['name']
+    )
+    
+    # Get the ImportDoc
+    import_doc = frappe.get_doc("ImportDoc", import_doc_name)
+    
+    # Clear existing linked purchase invoices
+
+    
+    # Add each Purchase Invoice to the table
+    for pi in linked_pi:
+        import_doc.append("linked_purchase_invoices", {
+            "purchase_invoice": pi.name
+            # Other fields (total_value, total_base_value, party_account_currency)
+            # will be auto-fetched due to fetch_from properties in the DocType
+        })
+    
+    # Save the ImportDoc
+    import_doc.save()
 
 def update_data_in_import_doc(import_doc_name):
+    time.sleep(3)
     doc = frappe.get_doc("ImportDoc",import_doc_name)
     doc.items = []
     doc.linked_import_charges = []
     doc.linked_misc_import_charges = []
+    doc.linked_purchase_invoices = []
     doc.save()
     
-    
+    update_purchase_invoices(import_doc_name)
+    update_line_items(import_doc_name)
     bulk_update_import_charges(import_doc_name)
     update_misc_import_charges(import_doc_name)
     update_unallocated_misc_charges_jv(import_doc_name)
-    update_line_items(import_doc_name)
     calculate_total_import_charges(import_doc_name)
     allocate_import_charges(import_doc_name)
     frappe.db.commit()
@@ -610,7 +646,14 @@ def on_submit_purchase_invoice(doc, method):
     Updates the import doc data if custom_import_document is set.
     """
     if doc.custom_import_document:
-        update_data_in_import_doc(doc.custom_import_document)
+        # Defer the update to happen after the document is submitted
+        frappe.enqueue(
+            'importmanager.import_utils.update_data_in_import_doc',
+            import_doc_name=doc.custom_import_document,
+            queue='short',
+            timeout=300,
+            now=False
+        )
 
 def on_cancel_purchase_invoice(doc, method):
     """
@@ -618,7 +661,14 @@ def on_cancel_purchase_invoice(doc, method):
     Updates the import doc data if custom_import_document is set.
     """
     if doc.custom_import_document:
-        update_data_in_import_doc(doc.custom_import_document)
+        # Defer the update to happen after the document is cancelled
+        frappe.enqueue(
+            'importmanager.import_utils.update_data_in_import_doc',
+            import_doc_name=doc.custom_import_document,
+            queue='short',
+            timeout=300,
+            now=False
+        )
 
 def on_submit_journal_entry(doc, method):
     """
@@ -626,7 +676,14 @@ def on_submit_journal_entry(doc, method):
     Updates the import doc data if custom_import_document is set.
     """
     if doc.custom_import_document:
-        update_data_in_import_doc(doc.custom_import_document)
+        # Defer the update to happen after the document is submitted
+        frappe.enqueue(
+            'importmanager.import_utils.update_data_in_import_doc',
+            import_doc_name=doc.custom_import_document,
+            queue='short',
+            timeout=300,
+            now=False
+        )
 
 def on_cancel_journal_entry(doc, method):
     """
@@ -634,10 +691,17 @@ def on_cancel_journal_entry(doc, method):
     Updates the import doc data if custom_import_document is set.
     """
     if doc.custom_import_document:
-        update_data_in_import_doc(doc.custom_import_document)
+        # Defer the update to happen after the document is cancelled
+        frappe.enqueue(
+            'importmanager.import_utils.update_data_in_import_doc',
+            import_doc_name=doc.custom_import_document,
+            queue='short',
+            timeout=300,
+            now=False
+        )
 
 
-
+    
 
 
 
