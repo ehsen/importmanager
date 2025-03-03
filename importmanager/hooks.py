@@ -158,6 +158,10 @@ doc_events = {
     "Journal Entry": {
         "on_submit": "importmanager.import_utils.on_submit_journal_entry",
         "on_cancel": "importmanager.import_utils.on_cancel_journal_entry"
+    },
+    "Landed Cost Voucher": {
+        "on_submit": "importmanager.import_utils.on_submit_landed_cost_voucher",
+        "on_cancel": "importmanager.import_utils.on_cancel_landed_cost_voucher"
     }
 }
 
