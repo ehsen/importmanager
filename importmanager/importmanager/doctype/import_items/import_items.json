@@ -16,7 +16,8 @@
   "st_unit_cost",
   "total_unit_cost",
   "allocated_charges_ex_cd",
-  "purchase_receipt_item"
+  "purchase_receipt_item",
+  "assessment_variance"
  ],
  "fields": [
   {
@@ -92,12 +93,19 @@
    "fieldtype": "Currency",
    "label": "Total Unit Cost",
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "assessment_variance",
+   "fieldtype": "Currency",
+   "label": "Assessment Variance",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2025-01-08 15:10:23.273448",
+ "modified": "2025-03-04 12:42:53.979841",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "Import Items",

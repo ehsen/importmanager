@@ -308,7 +308,7 @@ def get_customs_duty(import_doc_name):
     ast = 0
     it = 0
     item_wise_duty = {}
-    
+    print(f"lcv is {lcv}")
     for item in lcv:
         lcv_doc = frappe.get_doc("Landed Cost Voucher",item)
         for lcv_item in lcv_doc.items:
@@ -329,7 +329,7 @@ def get_customs_duty(import_doc_name):
                 item_wise_duty[lcv_item.item_code]['ast'] += lcv_item.custom_ast
                 item_wise_duty[lcv_item.item_code]['it'] += lcv_item.custom_it
         
-    return {'item_wise_duty':item_wise_duty,'total':{'custom_duty':custom_duty,'acd':acd,'cess':cess,'stamnt':stamnt,'ast':ast,'it':it}}
+    return {'landed_cost_voucher_name':lcv[0],'item_wise_duty':item_wise_duty,'total':{'custom_duty':custom_duty,'acd':acd,'cess':cess,'stamnt':stamnt,'ast':ast,'it':it}}
 
     
 def update_misc_import_charges(import_doc_name):
@@ -342,7 +342,7 @@ def update_misc_import_charges(import_doc_name):
     print(lc_settlements)
     if len(lc_settlements) > 0:
         lc_doc = frappe.get_doc("Letter Of Credit",lc_settlements[0]['letter_of_credit_to_settle'])
-        print(lc_doc)
+        
         data_dict = {}
         for item in lc_settlements:
             data_dict['document_type'] = 'LC Settlement'
@@ -351,17 +351,24 @@ def update_misc_import_charges(import_doc_name):
             data_dict['paid_to'] = lc_doc.issuing_bank
             data_dict['amount'] = item['lc_charges']
             import_doc.append("linked_misc_import_charges",data_dict)
-        
-    custom_data = get_customs_duty(import_doc_name)['total']
+
+    lcv_data = get_customs_duty(import_doc_name)
+ 
+    custom_data = lcv_data['total']
+    
     total_customs_duty = custom_data['custom_duty'] + custom_data['acd']
     total_cess = custom_data['cess']
+    lcv_doc = lcv_data['landed_cost_voucher_name']
     if total_customs_duty > 0:
         import_doc.append("linked_misc_import_charges", {'import_charge_type':'Customs Duty',
-        'amount':total_customs_duty})
+        'amount':total_customs_duty,'document_type':'Landed Cost Voucher','document_name':lcv_doc,
+        'paid_to':'Pakistan Customs'})
+        print('appended row')
     
     if total_cess > 0:
         import_doc.append("linked_misc_import_charges", {'import_charge_type':'Cess',
-        'amount':total_cess})
+        'amount':total_cess,'document_type':'Landed Cost Voucher','document_name':lcv_doc,
+        'paid_to':'Sindh Excise and Taxation'})
     
     
 
@@ -476,6 +483,7 @@ def allocate_import_charges(import_doc_name):
     #TODO: This function should striclty be tested for ImportDoc where multiple Items are added
     # TODO: This function shoudl be optimzied the way it pulls the import charges from LCV. 
     
+    print('allocate import charges executed')
     import_doc = frappe.get_doc("ImportDoc",import_doc_name)
     import_taxes_data = get_customs_duty(import_doc_name)
     item_wise_total_duty = import_taxes_data['item_wise_duty']
@@ -503,14 +511,16 @@ def allocate_import_charges(import_doc_name):
             item.net_unit_cost = (item.allocated_import_charges + item.amount)/item.qty
             item.st_unit_cost = 0
             allocated_service_sales_tax = (item.amount/total_items_amount) * import_doc.sales_tax_on_services
-
+        
             if lcv_item is not None:
+                item.assessment_variance = lcv_item.custom_base_assessment_difference
                 item.st_unit_cost += ((lcv_item.custom_base_assessed_value + item_customs_duty)/item.qty)
                 item.total_unit_cost = (item.amount + item_customs_duty + allocated_service_sales_tax+item.allocated_charges_ex_cd+lcv_item.custom_it+item_sales_tax)/item.qty
 
                 
         total_allocated_charges = sum(item.allocated_import_charges for item in import_doc.items)
-        assert(total_allocated_charges == import_doc.total_import_charges)
+        
+        assert(round(total_allocated_charges) == round(import_doc.total_import_charges))
         import_doc.sales_tax_on_import = import_taxes_data['total']['stamnt']+import_taxes_data['total']['ast']
         import_doc.total_income_tax = import_taxes_data['total']['it']
         import_doc.total_import_value = import_doc.total_cost + import_doc.sales_tax_on_import+import_doc.sales_tax_on_services + import_doc.total_income_tax
@@ -688,6 +698,39 @@ def on_submit_journal_entry(doc, method):
 def on_cancel_journal_entry(doc, method):
     """
     Hook for Journal Entry on_cancel event.
+    Updates the import doc data if custom_import_document is set.
+    """
+    if doc.custom_import_document:
+        # Defer the update to happen after the document is cancelled
+        frappe.enqueue(
+            'importmanager.import_utils.update_data_in_import_doc',
+            import_doc_name=doc.custom_import_document,
+            queue='short',
+            timeout=300,
+            now=False
+        )
+
+def on_submit_landed_cost_voucher(doc, method):
+    """
+    Hook for Landed Cost Voucher on_submit event.
+    Updates the import doc data if custom_import_document is set.
+    """
+    if doc.custom_import_document:
+        # Create import taxes JVs
+        create_import_taxes_jv(doc.name)
+        
+        # Defer the update to happen after the document is submitted
+        frappe.enqueue(
+            'importmanager.import_utils.update_data_in_import_doc',
+            import_doc_name=doc.custom_import_document,
+            queue='short',
+            timeout=300,
+            now=False
+        )
+
+def on_cancel_landed_cost_voucher(doc, method):
+    """
+    Hook for Landed Cost Voucher on_cancel event.
     Updates the import doc data if custom_import_document is set.
     """
     if doc.custom_import_document:

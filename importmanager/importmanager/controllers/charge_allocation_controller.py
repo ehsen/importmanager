@@ -5,6 +5,7 @@ handle allocation charges
 import frappe
 from frappe.utils import flt, nowdate, nowtime
 from importmanager.import_utils import create_gl_entries
+import time
 
 def create_charge_allocation_gl(posting_date, charges, reference_doc_name,charge_type):
     """
@@ -132,6 +133,7 @@ def update_allocated_charges(sales_invoice_name, item_code, charges,charge_type)
             )
         
         frappe.db.commit()
+        time.sleep(1) # to handle 
         
     except Exception as e:
         frappe.log_error(message=str(e), title="Error Updating Allocated Charges")
@@ -295,7 +297,121 @@ def get_last_allocation(item_code,charge_type):
             fields=["charges", "qty", "source_references"]
         )
 
+def calculate_allocation_charges(item_code, qty, charge_type, entry_type="Allocation"):
+    """
+    Calculate allocation charges for an item, handling both allocations and returns.
+    
+    Args:
+        item_code (str): The item code to calculate charges for
+        qty (float): Quantity to allocate
+        charge_type (str): Either "Import Charges" or "Assessment Variance"
+        entry_type (str): "Allocation" or "Return"
+        
+    Returns:
+        float: The calculated allocation charges
+    """
+    try:
+        if entry_type == "Return":
+            # Fetch all relevant allocation entries for the item
+            allocation_entries = frappe.get_all(
+                "Charge Allocation Ledger",
+                filters={
+                    "entry_type": "Allocation",
+                    "charge_type": charge_type,
+                    "item_code": item_code,
+                    "is_cancelled": 0
+                },
+                order_by="posting_datetime desc",  # Most recent first
+                fields=["name", "charges", "qty"]
+            )
 
+            if not allocation_entries:
+                frappe.throw(f"No previous allocation entries found for item {item_code}.")
+
+            remaining_return_qty = abs(qty)  # Work with absolute value for calculations
+            total_return_charges = 0
+
+            for allocation in allocation_entries:
+                if remaining_return_qty <= 0:
+                    break
+
+                alloc_doc = frappe.get_doc("Charge Allocation Ledger", allocation.name)
+                per_unit_charge = alloc_doc.charges / alloc_doc.qty if alloc_doc.qty > 0 else 0
+                
+                # Calculate how much quantity we can return from this allocation
+                returnable_qty = min(remaining_return_qty, alloc_doc.qty)
+                return_charges = per_unit_charge * returnable_qty
+                
+                total_return_charges += return_charges
+                remaining_return_qty -= returnable_qty
+
+            if remaining_return_qty > 0:
+                frappe.throw(f"Cannot find enough allocation entries to return {qty} units of item {item_code}")
+
+            # Make the total charges negative since this is a return
+            total_return_charges = -1 * total_return_charges
+            return total_return_charges
+        
+        else:
+            # For allocations, fetch from Addition entries
+            allocation_sources = frappe.get_all(
+                "Charge Allocation Ledger",
+                filters={
+                    "entry_type": "Addition",
+                    "charge_type": charge_type,
+                    "item_code": item_code,
+                    "remaining_qty": [">", 0],
+                    "is_cancelled": 0
+                },
+                fields=["name", "remaining_qty", "remaining_charges"],
+                order_by="posting_datetime asc"  # Oldest additions first for FIFO
+            )
+
+        if not allocation_sources:
+            frappe.log_error(
+                message=f"No {entry_type.lower()} sources found for {item_code} with {charge_type}",
+                title="Charge Allocation Warning"
+            )
+            return 0
+
+        allocated_qty = 0
+        allocated_charges = 0
+
+        for source in allocation_sources:
+            if allocated_qty >= qty:
+                break
+            
+            allocatable_qty = min(source["remaining_qty"], qty - allocated_qty)
+            charges_per_unit = source["remaining_charges"] / source["remaining_qty"]
+            allocatable_charges = flt(charges_per_unit * allocatable_qty)
+
+            allocated_qty += allocatable_qty
+            allocated_charges += allocatable_charges
+
+        if allocated_qty < qty:
+            frappe.log_error(
+                message=(
+                    f"Partial {entry_type.lower()} for {item_code}:\n"
+                    f"Requested Qty: {qty}\n"
+                    f"Allocated Qty: {allocated_qty}\n"
+                    f"Charge Type: {charge_type}\n"
+                    f"Allocated Charges: {allocated_charges}"
+                ),
+                title=f"Partial Charge {entry_type} Warning"
+            )
+
+        # For returns, the charges should be negative
+        if entry_type == "Return":
+            allocated_charges = -1 * allocated_charges
+
+        return allocated_charges
+
+    except Exception as e:
+        frappe.log_error(
+            message=f"Error calculating {entry_type.lower()} charges: {str(e)}",
+            title=f"Charge {entry_type} Calculation Error"
+        )
+        raise
 
 def create_charge_allocation_entry(entry_type, charge_type, item_code, qty, charges, reference_doc, reference_doc_name):
     """
@@ -358,8 +474,8 @@ def create_charge_allocation_entry(entry_type, charge_type, item_code, qty, char
         }).insert(ignore_permissions=True)
 
         # Update the Sales Invoice Item for return
-        update_allocated_charges(reference_doc_name, item_code, -total_return_charges, charge_type)  # Deduct charges
-
+        #update_allocated_charges(reference_doc_name, item_code, -total_return_charges, charge_type)  # Deduct charges
+        
         # Increase the source document's remaining quantity and charges
         if len(last_entry.source_references)>0:
             
@@ -466,7 +582,8 @@ def create_charge_allocation_entry(entry_type, charge_type, item_code, qty, char
 
         print("going to update sales invoice")
         # Update the Sales Invoice Item
-        update_allocated_charges(reference_doc_name, item_code, allocated_charges, charge_type)
+        #update_allocated_charges(reference_doc_name, item_code, allocated_charges, charge_type)
+        
 
 def create_line_wise_charge_entry(import_doc):
     # This will loop over all ImportDoc Items and create Charge Entries
@@ -483,57 +600,70 @@ def create_line_wise_charge_entry(import_doc):
 def on_submit_create_allocation_entries(doc, method):
     """
     Hook function triggered on the 'on_submit' event of a Sales Invoice.
-    Creates allocation charge entries for each item in the Sales Invoice using the allocation charge function.
-
-    :param doc: The Sales Invoice document that triggered the hook.
-    :param method: The method triggering the hook (standard Frappe hook parameter).
     """
-    entry_type = "Allocation"
-    if doc.is_return == 1:
-        entry_type = "Return"
+    entry_type = "Return" if doc.is_return == 1 else "Allocation"
+    
     for item in doc.items:
         try:
-            # Call the create_charge_allocation_entry function
-            print("Creating Import Charges entry *************")
-            create_charge_allocation_entry(
-                entry_type=entry_type,
+            # Calculate charges first
+            import_charges = calculate_allocation_charges(
+                item_code=item.item_code,
+                qty=item.qty,
                 charge_type="Import Charges",
+                entry_type=entry_type  # Pass the entry type to handle returns properly
+            )
+            
+            assessment_charges = calculate_allocation_charges(
                 item_code=item.item_code,
                 qty=item.qty,
-                charges=0,  # Charges calculation will be handled by the function
-                reference_doc="Sales Invoice",
-                reference_doc_name=doc.name
-            
-            )
-            frappe.log_error(message=f"Allocation Amount is {item.custom_allocated_charges}",title="Allocation Amount GL ISSUe")  
-            #TODO: Disabled Temporarily create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_allocated_charges, reference_doc_name=doc.name,charge_type="Import Charges")
-            
-            # Create Assessment Variance Entry
-            # Call the create_charge_allocation_entry function
-            print("Creating assessment variance entry")
-            create_charge_allocation_entry(
-                entry_type=entry_type,
                 charge_type="Assessment Variance",
-                item_code=item.item_code,
-                qty=item.qty,
-                charges=0,  # Charges calculation will be handled by the function
-                reference_doc="Sales Invoice",
-                reference_doc_name=doc.name,
-                
-            
+                entry_type=entry_type  # Pass the entry type to handle returns properly
             )
-            frappe.log_error(message=f"Import Assessment Amount is {item.custom_assessment_charges}",title="Assessment Variance GL ISSUe")  
-            #create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_assessment_charges, reference_doc_name=doc.name,charge_type="Assessment Variance")
+            
+            # Process import charges (both positive and negative)
+            if import_charges != 0:  # Changed from > 0 to != 0
+                create_charge_allocation_entry(
+                    entry_type=entry_type,
+                    charge_type="Import Charges",
+                    item_code=item.item_code,
+                    qty=item.qty,
+                    charges=import_charges,
+                    reference_doc="Sales Invoice",
+                    reference_doc_name=doc.name
+                )
+                create_charge_allocation_gl(
+                    posting_date=doc.posting_date,
+                    charges=abs(import_charges),  # Use absolute value for GL
+                    reference_doc_name=doc.name,
+                    charge_type="Import Charges"
+                )
+            
+            # Process assessment charges (both positive and negative)
+            if assessment_charges != 0:  # Changed from > 0 to != 0
+                create_charge_allocation_entry(
+                    entry_type=entry_type,
+                    charge_type="Assessment Variance",
+                    item_code=item.item_code,
+                    qty=item.qty,
+                    charges=assessment_charges,
+                    reference_doc="Sales Invoice",
+                    reference_doc_name=doc.name
+                )
+                create_charge_allocation_gl(
+                    posting_date=doc.posting_date,
+                    charges=abs(assessment_charges),  # Use absolute value for GL
+                    reference_doc_name=doc.name,
+                    charge_type="Assessment Variance"
+                )
+            
+            # Update Sales Invoice Item after everything else is done
+            # For returns, the charges are already negative from calculate_allocation_charges
+            update_allocated_charges(doc.name, item.item_code, import_charges, "Import Charges")
+            update_allocated_charges(doc.name, item.item_code, assessment_charges, "Assessment Variance")
             
         except Exception as e:
-            # Log errors to avoid stopping the on_submit process
-            frappe.log_error(message=str(e), title="Charge Allocation Error")
-            frappe.msgprint(
-                f"Failed to create allocation entry for Item: {item.item_code}. Error: {str(e)}",
-                alert=True
-            )
-        
-            #TODO: disabled temporarily create_charge_allocation_gl(posting_date=nowdate(), charges=item.custom_allocated_charges, reference_doc_name=doc.name)
+            frappe.log_error(message=str(e), title=f"Allocation Error - {item.item_code}")
+            frappe.throw(f"Failed to process item {item.item_code}: {str(e)}")
 
 
 def on_submit_import_doc(doc, method):

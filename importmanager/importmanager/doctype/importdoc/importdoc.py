@@ -4,51 +4,92 @@
 import frappe
 from frappe.model.document import Document
 from importmanager.import_utils import update_data_in_import_doc
+from importmanager.importmanager.controllers.charge_allocation_controller import create_charge_allocation_entry
 
 
 class ImportDoc(Document):
-	def onload(self):
-		if self.name != None:
-			#update_data_in_import_doc(self.name)
-			pass
-
-
-	def fetch_linked_invoices(self):
-		pi_list = frappe.get_list("Purchase Invoice",fields=['name',"rounded_total","base_rounded_total"],
-							filters={'custom_import_document':self.name,'docstatus':1,"custom_purchase_invoice_type":"Import"})
-		self.linked_purchase_invoices = [] 
-		for item in pi_list:
-			self.append("linked_purchase_invoices",{
-				"purchase_invoice":item['name'],
-				"total_value":item['rounded_total'],
-				"total_base_value":item['base_rounded_total']
-
-
-			})
 	
-	def fetch_linked_service_invoices(self):
-		pi_list = frappe.get_list("Purchase Invoice",fields=['name'],
-							filters={'custom_import_document':self.name,'docstatus':1,
-				"custom_purchase_invoice_type":"Import Service Charges"},pluck='name')
-		self.linked_import_charges = [] 
-		for item in pi_list:
-			pi_doc = frappe.get_cached_doc("Purchase Invoice",item)
-			for pi_row in pi_doc.get("items"):
-				self.append("linked_import_charges",{
-					"document_type":"Purchase Invoice",
-					"document_name":pi_doc.name,
-					"charge_item":pi_row.item_name,
-					"paid_to":pi_doc.supplier,
-					"amount":pi_doc.rounded_total
 
+	def create_import_charge_allocations(self):
+		"""
+		Create charge allocation entries for all items in the ImportDoc
+		"""
+		try:
+			for item in self.items:
+				# Create Import Charges allocation entry
+				if item.allocated_charges_ex_cd > 0:
+					create_charge_allocation_entry(
+						entry_type="Addition",
+						charge_type="Import Charges",
+						item_code=item.item_code,
+						qty=item.qty,
+						charges=item.allocated_charges_ex_cd,
+						reference_doc="ImportDoc",
+						reference_doc_name=self.name
+					)
+				
+				# Create Assessment Variance allocation entry
+				if item.assessment_variance > 0:
+					create_charge_allocation_entry(
+						entry_type="Addition",
+						charge_type="Assessment Variance",
+						item_code=item.item_code,
+						qty=item.qty,
+						charges=item.assessment_variance,
+						reference_doc="ImportDoc",
+						reference_doc_name=self.name
+					)
+		except Exception as e:
+			frappe.log_error(f"Error creating charge allocations: {str(e)}", "Import Charge Allocation Error")
+			frappe.throw(f"Failed to create charge allocations: {str(e)}")
 
-				})
+	def on_submit(self):
+		"""
+		Override standard submit behavior to:
+		1. Create charge allocation entries
+		2. Set status to 'Locked' instead of actually submitting
+		"""
+		try:
+			# Create charge allocations
+			self.create_import_charge_allocations()
 			
+			# Set status to Locked
+			self.status = "Locked"
+			self.docstatus = 0  # Keep as draft
+			self.save()
+			
+			frappe.msgprint("Import Document has been locked and charges have been allocated.")
+			
+		except Exception as e:
+			frappe.log_error(f"Error in ImportDoc submission: {str(e)}", "ImportDoc Submit Error")
+			frappe.throw(f"Failed to process ImportDoc: {str(e)}")
+
+	def on_cancel(self):
+		"""
+		Prevent cancellation if status is Locked
+		"""
+		if self.status == "Locked":
+			frappe.throw("Cannot cancel a Locked Import Document")
+	
+	
+@frappe.whitelist()
+def lock_and_allocate_charges(doc_name):
+	"""
+	Lock the ImportDoc and create charge allocation entries
+	"""
+	doc = frappe.get_doc("ImportDoc", doc_name)
+	
+	try:
+		# Create charge allocation entries
+		doc.create_import_charge_allocations()
 		
-
-
-	def update_import_doc(self):
-		"""
-		This function will fetch all linked documents related to this import doc, 
-		"""
-		pass
+		# Update status to Locked
+		doc.status = "Locked"
+		doc.save()
+		
+		frappe.db.commit()
+		return True
+		
+	except Exception as e:
+		frappe.log_error(f"Error in locking ImportDoc: {str(e)}", "ImportDoc Lock Error")
+		frappe.throw(f"Failed to lock document: {str(e)}")
