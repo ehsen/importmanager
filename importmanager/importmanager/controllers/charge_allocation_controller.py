@@ -7,17 +7,22 @@ from frappe.utils import flt, nowdate, nowtime
 from importmanager.import_utils import create_gl_entries
 import time
 
-def create_charge_allocation_gl(posting_date, charges, reference_doc_name,charge_type):
+def create_charge_allocation_gl(posting_date, charges, reference_doc_name, charge_type):
     """
     Creates GL entries for allocated charges on Sales Invoice.
+    For returns, reverses the GL entries by swapping debit and credit.
 
     :param posting_date: Date for the GL Entries (e.g., '2024-12-07').
     :param charges: Total allocated charges.
     :param reference_doc_name: The name of the Sales Invoice (reference for the GL).
+    :param charge_type: Type of charge ('Import Charges' or 'Assessment Variance').
     """
-    print(f"Hitting Charge allocation GL")
+    # Fetch the Sales Invoice to check if it's a return
+    sales_invoice = frappe.get_doc("Sales Invoice", reference_doc_name)
+    is_return = sales_invoice.is_return
+
     # Fetch the Company linked to the Sales Invoice
-    company = frappe.get_doc("Sales Invoice", reference_doc_name).company
+    company = sales_invoice.company
 
     # Fetch the default accounts from the Company document
     company_doc = frappe.get_doc("Company", company)
@@ -26,82 +31,74 @@ def create_charge_allocation_gl(posting_date, charges, reference_doc_name,charge
     default_import_assessment_account = company_doc.custom_assessment_variance_account
     assessment_variance_charges_account = company_doc.custom_default_import_assessment_charge_account
 
-
     # Validate if accounts are found
     if not unallocated_import_charges_account or not default_import_charges_account:
         frappe.throw("Required accounts not found in the Company document.")
 
     if charge_type == "Import Charges":
-    # Prepare GL Entry details
+        # For returns, swap debit and credit
+        debit_account = unallocated_import_charges_account if is_return else default_import_charges_account
+        credit_account = default_import_charges_account if is_return else unallocated_import_charges_account
+        
         accounts = [
-            # Debit the P&L Account for allocated charges
             {
-                "account": default_import_charges_account,
+                "account": debit_account,
                 "debit": charges,
                 "credit": 0,
-                
                 "party_type": None,
                 "party": None,
                 "voucher_type": "Sales Invoice",
-                "voucher_subtype":"Sales Invoice",
-                "against":unallocated_import_charges_account,
+                "voucher_subtype": "Sales Invoice",
+                "against": credit_account,
                 "voucher_no": reference_doc_name
             },
-            # Credit the Balance Sheet Account (Unallocated Import Charges)
             {
-                "account": unallocated_import_charges_account,
+                "account": credit_account,
                 "debit": 0,
                 "credit": charges,
-                
                 "party_type": None,
                 "party": None,
                 "voucher_type": "Sales Invoice",
-                "voucher_subtype":"Sales Invoice",
-                "against":default_import_charges_account,
+                "voucher_subtype": "Sales Invoice",
+                "against": debit_account,
                 "voucher_no": reference_doc_name
             }
         ]
 
     elif charge_type == "Assessment Variance":
-        # If postive charges means Assessment > Declared Value
+        # For returns, swap debit and credit
+        debit_account = assessment_variance_charges_account if is_return else default_import_assessment_account
+        credit_account = default_import_assessment_account if is_return else assessment_variance_charges_account
+        
         accounts = [
-            # Debit the P&L Account for allocated charges
             {
-                "account": default_import_assessment_account,
+                "account": debit_account,
                 "debit": charges,
                 "credit": 0,
-                
                 "party_type": None,
                 "party": None,
                 "voucher_type": "Sales Invoice",
-                "voucher_subtype":"Sales Invoice",
-                "against":assessment_variance_charges_account,
+                "voucher_subtype": "Sales Invoice",
+                "against": credit_account,
                 "voucher_no": reference_doc_name
             },
-            # Credit the Balance Sheet Account (Unallocated Import Charges)
             {
-                "account": assessment_variance_charges_account,
+                "account": credit_account,
                 "debit": 0,
                 "credit": charges,
-                
                 "party_type": None,
                 "party": None,
                 "voucher_type": "Sales Invoice",
-                "voucher_subtype":"Sales Invoice",
-                "against":default_import_assessment_account,
+                "voucher_subtype": "Sales Invoice",
+                "against": debit_account,
                 "voucher_no": reference_doc_name
             }
         ]
 
-
-    #TODO: Add assertion here that debit and credits are equal or use erpnext default function
-
-    # Call the function to create GL entries
     try:
-        create_gl_entries(posting_date, accounts,company)
+        create_gl_entries(posting_date, accounts, company)
         frappe.msgprint(f"GL Entries created for Sales Invoice: {reference_doc_name}")
     except Exception as e:
-        # Log the error if GL entries creation fails
         frappe.log_error(message=str(e), title="GL Entries Error")
         frappe.msgprint(f"Failed to create GL entries for Sales Invoice: {reference_doc_name}. Error: {str(e)}", alert=True)
 
@@ -457,7 +454,7 @@ def create_charge_allocation_entry(entry_type, charge_type, item_code, qty, char
         per_unit_charge = last_entry.charges / last_entry.qty if last_entry.qty > 0 else 0
         print(f"per unit charge is {per_unit_charge}")
         total_return_charges = per_unit_charge * qty
-
+        frappe.log_error(message=f"total return charges are {total_return_charges}",title="total return charges")
         # Handle 'Return' entry
         frappe.get_doc({
             "doctype": "Charge Allocation Ledger",
