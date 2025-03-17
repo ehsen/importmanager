@@ -153,7 +153,8 @@ doc_events = {
     "Purchase Invoice": {
 		"on_update": "importmanager.import_utils.set_expense_head",
         "on_submit": "importmanager.import_utils.on_submit_purchase_invoice",
-        "on_cancel": "importmanager.import_utils.on_cancel_purchase_invoice"
+        "on_cancel": "importmanager.import_utils.on_cancel_purchase_invoice",
+        "autoname": "importmanager.import_utils.autoname_purchase_invoice"
 	},
     "Journal Entry": {
         "on_submit": "importmanager.import_utils.on_submit_journal_entry",

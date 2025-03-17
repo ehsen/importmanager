@@ -1,8 +1,9 @@
 import frappe
-from frappe.utils import nowdate
+from frappe.utils import nowdate,datetime
 from erpnext import get_default_cost_center
 from erpnext.controllers.taxes_and_totals import get_itemised_tax_breakup_data
 import time
+from frappe.model.naming import make_autoname
 
 def create_journal_voucher(title, posting_date, accounts,import_document=None):
     """
@@ -744,7 +745,40 @@ def on_cancel_landed_cost_voucher(doc, method):
         )
 
 
+
+
+
+def autoname_purchase_invoice(doc, method):
+    # Get current year as 2 digits
+    current_year = datetime.datetime.now().strftime('%y')
     
+    # Get company abbreviation
+    company_abbr = doc.custom_abbr or ''
+    
+    # Handle different naming based on purchase invoice type
+    if doc.custom_purchase_invoice_type == "Import":
+        if doc.custom_import_document:
+            import_doc = frappe.get_doc("ImportDoc", doc.custom_import_document)
+            if import_doc.gd_no:
+                doc.name = f"{company_abbr}-IPI-{current_year}-{import_doc.gd_no}"
+    
+    elif doc.custom_purchase_invoice_type == "Local Purchase":
+        if doc.is_return:
+            # Local Purchase Return
+            doc.name = make_autoname(f"{company_abbr}-LPI-RTN{current_year}-.#####")
+        else:
+            # Regular Local Purchase
+            doc.name = make_autoname(f"{company_abbr}-LPI-{current_year}-.#####")
+    
+    elif doc.custom_purchase_invoice_type == "Import Service Charges":
+        if doc.is_return:
+            # Import Service Charges Return
+            doc.name = make_autoname(f"{company_abbr}-SC-RTN-{current_year}-.#####")
+        else:
+            # Regular Import Service Charges
+            doc.name = make_autoname(f"{company_abbr}-SC-{current_year}-.#####")
+
+
 
 
 
