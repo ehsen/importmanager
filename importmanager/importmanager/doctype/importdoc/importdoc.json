@@ -1,6 +1,6 @@
 {
  "actions": [],
- "autoname": "field:linked_purchase_order",
+ "autoname": "naming_series:",
  "creation": "2024-11-30 10:05:03.757601",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -226,11 +226,11 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-03-03 15:40:29.742115",
+ "modified": "2025-03-17 10:39:37.420754",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "ImportDoc",
- "naming_rule": "By fieldname",
+ "naming_rule": "By script",
  "owner": "Administrator",
  "permissions": [
   {

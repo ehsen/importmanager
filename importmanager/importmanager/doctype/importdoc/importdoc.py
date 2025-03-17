@@ -9,6 +9,18 @@ from importmanager.importmanager.controllers.charge_allocation_controller import
 
 class ImportDoc(Document):
 	
+	def autoname(self):
+		if self.linked_purchase_order:
+			from datetime import datetime
+			current_year = datetime.now().strftime('%y')  # Gets current year as 2-digit number (e.g., '24' for 2024)
+			# Split the purchase order name by "-" and get the last element
+			po_number = self.linked_purchase_order.split("-")[-1]
+			# Create the import doc name with proper format including current year
+			self.name = f"ALP-IMD-{current_year}-{po_number}"
+		else:
+			frappe.throw("Please select a Linked Purchase Order")
+
+	
 
 	def create_import_charge_allocations(self):
 		"""
