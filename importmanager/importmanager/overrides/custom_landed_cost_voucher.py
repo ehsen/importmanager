@@ -7,7 +7,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.model.meta import get_field_precision
 from frappe.query_builder.custom import ConstantColumn
-from frappe.utils import flt
+from frappe.utils import flt,datetime
 from importmanager.import_utils import calculate_import_assessment,create_import_taxes_jv
 
 import erpnext
@@ -63,6 +63,18 @@ class CustomLandedCostVoucher(Document):
 					item.purchase_receipt_item = d.name
 					item.is_fixed_asset = d.is_fixed_asset
 
+	
+
+	def autoname(self):
+		if self.custom_import_document:
+			# Get the linked ImportDoc
+			import_doc = frappe.get_doc("ImportDoc", self.custom_import_document)
+			if import_doc.gd_no:
+				# Get current year
+				current_year = datetime.datetime.now().strftime('%y')
+				# Set the name using the full GD number
+				self.name = f"ALP-LCV-{current_year}-{import_doc.gd_no}"
+		
 	def validate(self):
 		
 		self.check_mandatory()
