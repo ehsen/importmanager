@@ -35,18 +35,18 @@
   "name": "SDP"
  },
  {
-  "charge_name": "Opening Charges",
-  "docstatus": 0,
-  "doctype": "Import Charge Type",
-  "modified": "2024-12-28 13:02:38.773393",
-  "name": "Opening Charges"
- },
- {
   "charge_name": "PO Cancellation",
   "docstatus": 0,
   "doctype": "Import Charge Type",
   "modified": "2024-12-28 14:38:21.633795",
   "name": "PO Cancellation"
+ },
+ {
+  "charge_name": "Opening Charges",
+  "docstatus": 0,
+  "doctype": "Import Charge Type",
+  "modified": "2024-12-28 13:02:38.773393",
+  "name": "Opening Charges"
  },
  {
   "charge_name": "LC Charges",
@@ -56,18 +56,18 @@
   "name": "LC Charges"
  },
  {
-  "charge_name": "Customs Duty",
-  "docstatus": 0,
-  "doctype": "Import Charge Type",
-  "modified": "2024-12-21 16:41:30.720352",
-  "name": "Customs Duty"
- },
- {
   "charge_name": "Cess",
   "docstatus": 0,
   "doctype": "Import Charge Type",
   "modified": "2024-12-21 18:42:10.526711",
   "name": "Cess"
+ },
+ {
+  "charge_name": "Customs Duty",
+  "docstatus": 0,
+  "doctype": "Import Charge Type",
+  "modified": "2024-12-21 16:41:30.720352",
+  "name": "Customs Duty"
  },
  {
   "charge_name": "Insurance",
