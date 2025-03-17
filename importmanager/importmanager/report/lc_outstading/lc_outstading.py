@@ -5,7 +5,7 @@ import frappe
 
 
 
-def generate_outstanding_payments_report():
+def generate_outstanding_payments_report(filters):
     # Fetch all ImportDoc documents where status is not "Locked"
     import_docs = frappe.get_list("ImportDoc", filters={"status": ["!=", "Locked"]}, fields=["name"])
 
@@ -75,7 +75,7 @@ def execute(filters=None):
     ]
 
     # Generate the report data
-    data = generate_outstanding_payments_report()
+    data = generate_outstanding_payments_report(filters)
 
     return columns, data
 
