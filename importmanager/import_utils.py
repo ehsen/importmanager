@@ -600,10 +600,12 @@ def update_data_in_import_doc(import_doc_name):
     update_purchase_invoices(import_doc_name)
     update_line_items(import_doc_name)
     bulk_update_import_charges(import_doc_name)
-    update_misc_import_charges(import_doc_name)
+    if doc.linked_purchase_invoices:
+        update_misc_import_charges(import_doc_name)
     update_unallocated_misc_charges_jv(import_doc_name)
     calculate_total_import_charges(import_doc_name)
-    allocate_import_charges(import_doc_name)
+    if doc.linked_purchase_invoices:
+        allocate_import_charges(import_doc_name)
     frappe.db.commit()
 
 
