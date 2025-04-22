@@ -199,10 +199,10 @@ def create_import_taxes_jv(landed_cost_voucher):
             frappe.log_error(message=f"{str(e)}",title="Error Creating Import Jvs")
             frappe.throw("Error Creating Import JVs. Please Contact Support")
 def calculate_assessed_value(lcv_doc_item):
-    incoterm = frappe.get_doc(lcv_doc_item.receipt_document_type,lcv_doc_item.receipt_document).incoterm
+    incoterm = frappe.get_doc(lcv_doc_item.receipt_document_type,lcv_doc_item.receipt_document).incoterm or 
     
     if incoterm is None:
-        frappe.throw("No Incoterm found in Purchase Invoice")
+        incoterm = "Cost and Freight"
     
     ex_assess_value = lcv_doc_item.custom_assessed_value_per_unit * lcv_doc_item.qty
     lcv_doc_item.custom_cfr_value = ex_assess_value
