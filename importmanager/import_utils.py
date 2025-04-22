@@ -244,7 +244,7 @@ def calculate_import_taxes(lcv_item):
         # get taxes here
         tax_dict = get_taxes_by_category(tax_list[0])
         
-        
+        frappe.log_error(message=f"{tax_dict} base_assessed_value = {lcv_item.custom_base_assessed_value}",title="testing taxes")
         lcv_item.custom_cd = tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value
         lcv_item.custom_acd = tax_dict.get('ACD',0)/100 * lcv_item.custom_base_assessed_value
         amount_for_sales_tax = lcv_item.custom_base_assessed_value + lcv_item.custom_cd + lcv_item.custom_acd
