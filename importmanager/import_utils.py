@@ -25,7 +25,7 @@ def create_journal_voucher(title, posting_date, accounts,import_document=None):
     jv.is_system_generated = 1 # All entries via this method shoudl be marked as system generated
     jv.title = title
     jv.posting_date = posting_date or nowdate()
-    jv.voucher_type = "Journal Entry"
+    jv.voucher_type = "Journal Entry" 
     if import_document is not None:
         jv.custom_import_document = import_document
 
@@ -691,7 +691,11 @@ def update_data_in_import_doc(import_doc_name):
     update_purchase_invoices(import_doc_name)
     update_line_items(import_doc_name)
     bulk_update_import_charges(import_doc_name)
+    time.sleep(2)
+    doc = frappe.get_doc("ImportDoc",import_doc_name)
+    #frappe.log_error(message=f"hitted purchase invoice block {doc.linked_purchase_invoices}",title="linked_purchase invok")
     if doc.linked_purchase_invoices:
+        
         update_misc_import_charges(import_doc_name)
     update_unallocated_misc_charges_jv(import_doc_name)
     calculate_total_import_charges(import_doc_name)
