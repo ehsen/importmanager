@@ -154,6 +154,96 @@ def get_assessment_variance_transfer_entry(lcv_item,company):
     accounts_list.append(credit_dict)
     return accounts_list
 
+def create_consolidated_import_taxes_jv(landed_cost_voucher):
+    """
+    Creates consolidated journal entries for import taxes from landed cost voucher.
+    Creates one JV for assessment variance and one JV for all other tax entries.
+    Includes GD number in JV titles.
+    
+    Args:
+        landed_cost_voucher: Name of the Landed Cost Voucher
+    """
+    lcv_doc = frappe.get_doc("Landed Cost Voucher", landed_cost_voucher)
+    company = frappe.get_cached_doc("Company", lcv_doc.company)
+    
+    # Get GD number from ImportDoc
+    import_doc = frappe.get_doc("ImportDoc", lcv_doc.custom_import_document)
+    gd_no = import_doc.gd_no if import_doc.gd_no else "NO-GD"
+    
+    # Initialize lists for different types of entries
+    regular_tax_entries = []
+    assessment_entries = []
+    
+    for item in lcv_doc.get("items"):
+        try:
+            # Collect assessment variance entries
+            if item.custom_base_assessment_difference > 0:
+                assessment_entries.extend(get_assessment_variance_transfer_entry(item, company))
+            
+            # Collect all other tax entries
+            if item.custom_stamnt > 0:
+                regular_tax_entries.extend(get_sales_tax_entries(item, company))
+            if item.custom_ast > 0:
+                regular_tax_entries.extend(get_additional_sales_tax_entries(item, company))
+            if item.custom_it > 0:
+                regular_tax_entries.extend(get_advance_income_tax_entries(item, company))
+            if item.custom_cd > 0:
+                regular_tax_entries.extend(get_custom_duty_entries(item, company))
+            if item.custom_acd > 0:
+                regular_tax_entries.extend(get_additional_custom_duty_entries(item, company))
+            if item.custom_cess_amount > 0:
+                regular_tax_entries.extend(get_cess_amount_entries(item, company))
+                
+        except Exception as e:
+            frappe.log_error(message=f"{str(e)}", title="Error Creating Import Tax JVs")
+            frappe.throw("Error Creating Import Tax JVs. Please Contact Support")
+
+    # Create separate JV for assessment variance
+    if assessment_entries:
+        create_journal_voucher(
+            f"Assessment Variance Transfer - GD-{gd_no}",
+            lcv_doc.posting_date,
+            assessment_entries,
+            import_document=lcv_doc.custom_import_document
+        )
+
+    # Create consolidated JV for all other tax entries
+    if regular_tax_entries:
+        # Group entries by account, party_type, and party
+        consolidated_entries = {}
+        
+        for entry in regular_tax_entries:
+            # Create unique key for grouping
+            key = (
+                entry["account"],
+                entry.get("party_type", ""),
+                entry.get("party", "")
+            )
+            
+            if key in consolidated_entries:
+                # Add to existing entry
+                consolidated_entries[key]["debit"] += entry.get("debit", 0)
+                consolidated_entries[key]["credit"] += entry.get("credit", 0)
+            else:
+                # Create new entry
+                consolidated_entries[key] = {
+                    "account": entry["account"],
+                    "debit": entry.get("debit", 0),
+                    "credit": entry.get("credit", 0),
+                    "party_type": entry.get("party_type"),
+                    "party": entry.get("party")
+                }
+        
+        # Convert consolidated entries to list
+        final_entries = list(consolidated_entries.values())
+        
+        # Create single JV for all tax entries
+        create_journal_voucher(
+            f"Consolidated Import Taxes - GD-{gd_no}",
+            lcv_doc.posting_date,
+            final_entries,
+            import_document=lcv_doc.custom_import_document
+        )
 
 def create_import_taxes_jv(landed_cost_voucher):
     lcv_doc = frappe.get_doc("Landed Cost Voucher",landed_cost_voucher)
@@ -198,6 +288,7 @@ def create_import_taxes_jv(landed_cost_voucher):
         except Exception as e:
             frappe.log_error(message=f"{str(e)}",title="Error Creating Import Jvs")
             frappe.throw("Error Creating Import JVs. Please Contact Support")
+
 def calculate_assessed_value(lcv_doc_item):
     incoterm = frappe.get_doc(lcv_doc_item.receipt_document_type,lcv_doc_item.receipt_document).incoterm 
     
@@ -720,7 +811,7 @@ def on_submit_landed_cost_voucher(doc, method):
     """
     if doc.custom_import_document:
         # Create import taxes JVs
-        create_import_taxes_jv(doc.name)
+        #create_import_taxes_jv(doc.name)
         
         # Defer the update to happen after the document is submitted
         frappe.enqueue(
