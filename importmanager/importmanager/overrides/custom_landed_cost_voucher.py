@@ -8,7 +8,7 @@ from frappe.model.document import Document
 from frappe.model.meta import get_field_precision
 from frappe.query_builder.custom import ConstantColumn
 from frappe.utils import flt,datetime
-from importmanager.import_utils import calculate_import_assessment,create_import_taxes_jv
+from importmanager.import_utils import calculate_import_assessment,create_import_taxes_jv,create_consolidated_import_taxes_jv
 
 import erpnext
 from erpnext.controllers.taxes_and_totals import init_landed_taxes_and_totals
@@ -282,7 +282,8 @@ class CustomLandedCostVoucher(Document):
 
 		self.validate_applicable_charges_for_item()
 		try:
-			create_import_taxes_jv(self.name)
+			#create_import_taxes_jv(self.name)
+			create_consolidated_import_taxes_jv(self.name)
 			self.update_landed_cost()
 		except Exception:
 			frappe.db.rollback()
