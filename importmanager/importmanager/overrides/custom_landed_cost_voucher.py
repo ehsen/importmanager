@@ -72,8 +72,21 @@ class CustomLandedCostVoucher(Document):
 			if import_doc.gd_no:
 				# Get current year
 				current_year = datetime.datetime.now().strftime('%y')
-				# Set the name using the full GD number
-				self.name = f"ALP-LCV-{current_year}-{import_doc.gd_no}"
+				# Set the base name using the full GD number
+				base_name = f"ALP-LCV-{current_year}-{import_doc.gd_no}"
+				
+				# Count existing vouchers with the same base name (including cancelled ones)
+				existing_count = frappe.db.count(
+					"Landed Cost Voucher",
+					filters={"name": ["like", f"{base_name}%"]}
+				)
+				
+				if existing_count == 0:
+					# No duplicates found, use the base name
+					self.name = base_name
+				else:
+					# Add suffix based on count
+					self.name = f"{base_name}-{existing_count}"
 		
 	def validate(self):
 		
@@ -100,22 +113,44 @@ class CustomLandedCostVoucher(Document):
 		self.set_applicable_charges_on_item()
 
 	def apply_assessment_difference_and_duty(self):
+		"""
+		This function should suppose to enter unallocated import charges in baalnce sheet,
+		however on client request we are adjusting it in profit and loss which is technically wrong
+		"""
 		total_assessment_diff = 0
 		total_custom_duty = 0
-		unallocated_import_charges_account = frappe.get_doc("Company",self.company).custom_unallocated_import_charges_account
+		
+		# Check if company exists
+		if not self.company:
+			frappe.throw("Company is required")
+			
+		company_doc = frappe.get_doc("Company", self.company)
+		#following account is deprecated on customers request
+		unallocated_import_charges_account = company_doc.custom_unallocated_import_charges_account
+		#customs_duty_account = company_doc.custom_customs_duty_account
+		assessment_variance_account = company_doc.custom_default_import_assessment_charge_account
+		
+		# start from here
 		if not unallocated_import_charges_account:
-			frappe.throw("Please Set Default Unallocated Import Charges Account in Company Doc")
-		for d in self.get('items'):
+			frappe.throw("Please Set Unallocated Import Charges Account in Company Settings")
+		items = self.get('items') or []
+		for d in items:
 			total_assessment_diff += d.custom_base_assessment_difference
 			total_custom_duty += (d.custom_cd + d.custom_acd)
-		if unallocated_import_charges_account:
+		
+		
+		if unallocated_import_charges_account and assessment_variance_account:
+			
+			
 			
 			self.append("taxes",{
 				'expense_account': unallocated_import_charges_account,
 				'import_charge_type':'CD+Assessment Difference',
-				'description':'CD+Assessment Difference Charged to Stock Valuation',
-				'amount':total_assessment_diff + total_custom_duty
+				'description':'Custom Duty  Charged to Stock Valuation & Pakistan Customs',
+				'amount':total_custom_duty + total_assessment_diff
 			})
+			
+
 	
 		
 
