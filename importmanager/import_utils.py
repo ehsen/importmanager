@@ -140,7 +140,7 @@ def get_additional_custom_duty_entries(lcv_item,company):
 
 def get_cess_amount_entries(lcv_item,company):
     accounts_list = []
-    debit_dict = {'account':company.custom_unallocated_import_charges_account,'debit':lcv_item.custom_cess_amount,'credit':0}
+    debit_dict = {'account':company.custom_cess_account,'debit':lcv_item.custom_cess_amount,'credit':0}
     credit_dict = {'account':company.custom_default_gov_payable_account,'party_type':'Government','party':'Sindh Excise and Taxation','debit':0,'credit':lcv_item.custom_cess_amount}
     accounts_list.append(debit_dict)
     accounts_list.append(credit_dict)
@@ -149,7 +149,7 @@ def get_cess_amount_entries(lcv_item,company):
 def get_assessment_variance_transfer_entry(lcv_item,company):
     accounts_list = []
     debit_dict = {'account':company.custom_unallocated_import_charges_account,'debit':lcv_item.custom_base_assessment_difference,'credit':0}
-    credit_dict = {'account':company.custom_assessment_variance_account,'debit':0,'credit':lcv_item.custom_base_assessment_difference}
+    credit_dict = {'account':company.custom_default_import_assessment_charge_account,'debit':0,'credit':lcv_item.custom_base_assessment_difference}
     accounts_list.append(debit_dict)
     accounts_list.append(credit_dict)
     return accounts_list
@@ -199,6 +199,8 @@ def create_consolidated_import_taxes_jv(landed_cost_voucher):
             frappe.throw("Error Creating Import Tax JVs. Please Contact Support")
 
     # Create separate JV for assessment variance
+    
+
     if assessment_entries:
         create_journal_voucher(
             f"Assessment Variance Transfer - GD-{gd_no}",
@@ -206,6 +208,7 @@ def create_consolidated_import_taxes_jv(landed_cost_voucher):
             assessment_entries,
             import_document=lcv_doc.custom_import_document
         )
+    
 
     # Create consolidated JV for all other tax entries
     if regular_tax_entries:
@@ -358,11 +361,11 @@ def update_import_charges_in_import(doc):
         data_dict['document_type'] = "Purchase Invoice"
         data_dict['doc_name'] = doc.name
         #data_dict['charge_item'] = item.item_name
-        data_dict['import_charge_type'] = doc.custom_import_charge_type
+        data_dict['import_charge_type'] = item.item_name
         data_dict['paid_to'] = doc.supplier
-        data_dict['amount'] = doc.total
-        data_dict['total_st'] = doc.total_taxes_and_charges
-        data_dict['total_incl_tax'] = doc.rounded_total
+        data_dict['amount'] = item.amount
+        data_dict['total_st'] = item.custom_st
+        data_dict['total_incl_tax'] = item.custom_total_incl_tax
         #data_dict['purchase_invoice_item'] = item.name
         import_doc.append("linked_import_charges",data_dict)
     
@@ -401,6 +404,22 @@ def get_customs_duty(import_doc_name):
     it = 0
     item_wise_duty = {}
     print(f"lcv is {lcv}")
+    
+    # Check if lcv list is empty
+    if not lcv:
+        return {
+            'landed_cost_voucher_name': None,
+            'item_wise_duty': item_wise_duty,
+            'total': {
+                'custom_duty': custom_duty,
+                'acd': acd,
+                'cess': cess,
+                'stamnt': stamnt,
+                'ast': ast,
+                'it': it
+            }
+        }
+    
     for item in lcv:
         lcv_doc = frappe.get_doc("Landed Cost Voucher",item)
         for lcv_item in lcv_doc.items:
@@ -451,13 +470,15 @@ def update_misc_import_charges(import_doc_name):
     total_customs_duty = custom_data['custom_duty'] + custom_data['acd']
     total_cess = custom_data['cess']
     lcv_doc = lcv_data['landed_cost_voucher_name']
-    if total_customs_duty > 0:
+    
+    # Only add customs duty entries if there are actual LCV documents
+    if total_customs_duty > 0 and lcv_doc:
         import_doc.append("linked_misc_import_charges", {'import_charge_type':'Customs Duty',
         'amount':total_customs_duty,'document_type':'Landed Cost Voucher','document_name':lcv_doc,
         'paid_to':'Pakistan Customs'})
         print('appended row')
     
-    if total_cess > 0:
+    if total_cess > 0 and lcv_doc:
         import_doc.append("linked_misc_import_charges", {'import_charge_type':'Cess',
         'amount':total_cess,'document_type':'Landed Cost Voucher','document_name':lcv_doc,
         'paid_to':'Sindh Excise and Taxation'})
@@ -631,11 +652,14 @@ def set_expense_head(doc, method):
     """
     if doc.custom_purchase_invoice_type == "Import Service Charges" and doc.custom_import_document:
         # Fetch the Company document to get the account
-        company = frappe.get_doc("Company", doc.company)
-        unallocated_charges_account = company.custom_unallocated_import_charges_account
+        #company = frappe.get_doc("Company", doc.company)
+        import_charge_doc = frappe.get_doc("Import Charge Type",doc.custom_import_charge_type)
+        
+        if import_charge_doc.account_head == None:
+            frappe.throw(f"Please set account head in Import Charge - {doc.custom_import_charge_type}")
+        unallocated_charges_account = import_charge_doc.account_head
 
-        if not unallocated_charges_account:
-            frappe.throw("Please set 'Unallocated Import Charges Account' in Company settings.")
+        
 
         # Update expense head in items
         for item in doc.items:
