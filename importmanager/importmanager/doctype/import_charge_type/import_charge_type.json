@@ -5,7 +5,8 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "charge_name"
+  "charge_name",
+  "account_head"
  ],
  "fields": [
   {
@@ -15,11 +16,18 @@
    "label": "charge_name",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "fieldname": "account_head",
+   "fieldtype": "Link",
+   "label": "Account Head",
+   "options": "Account",
+   "reqd": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-12-13 12:39:46.002260",
+ "modified": "2025-07-07 23:09:13.984955",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "Import Charge Type",
