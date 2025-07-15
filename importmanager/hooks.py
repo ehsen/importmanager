@@ -101,6 +101,30 @@ fixtures = [
             ["fieldname", "=", "custom_apply_on_import_lcv"]
         ]
     },
+    {
+        "doctype": "Property Setter",
+        "filters": [
+            ["doc_type", "=", "Purchase Order Item"],
+            ["field_name", "=", "rate"],
+            ["property", "=", "precision"]
+        ]
+    },
+    {
+        "doctype": "Property Setter",
+        "filters": [
+            ["doc_type", "=", "Purchase Order Item"],
+            ["field_name", "=", "amount"],
+            ["property", "=", "precision"]
+        ]
+    },
+       {
+        "doctype": "Property Setter",
+        "filters": [
+            ["doc_type", "=", "Purchase Invoice Item"],
+            ["field_name", "=", "amount"],
+            ["property", "=", "precision"]
+        ]
+    },
 
 ]
 
