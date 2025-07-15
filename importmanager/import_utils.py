@@ -519,11 +519,12 @@ def update_unallocated_misc_charges_jv(import_doc_name):
     for je in journal_entries:
         je_doc = frappe.get_doc("Journal Entry", je["name"])
         for account in je_doc.accounts:
-            if account.account == unallocated_import_charges_account:
+            if account.debit_in_account_currency > 0:
                 # Prepare misc charges entry
                 misc_charge = {
                     "import_charge_type": je_doc.custom_import_charge_type,
-                    "amount": account.debit_in_account_currency - account.credit_in_account_currency,
+                    #"amount": account.debit_in_account_currency - account.credit_in_account_currency,
+                    "amount":account.debit_in_account_currency,
                     "document_type": "Journal Entry",
                     "document_name": je_doc.name
                 }
