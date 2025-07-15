@@ -65,29 +65,39 @@ class CustomLandedCostVoucher(Document):
 
 	
 
+
+	
+	
 	def autoname(self):
 		if self.custom_import_document:
-			# Get the linked ImportDoc
 			import_doc = frappe.get_doc("ImportDoc", self.custom_import_document)
+
 			if import_doc.gd_no:
-				# Get current year
-				current_year = datetime.datetime.now().strftime('%y')
-				# Set the base name using the full GD number
+				# Get the 2-digit year using Frappe-style naming
+				current_year = frappe.utils.now_datetime().strftime('%y')
 				base_name = f"ALP-LCV-{current_year}-{import_doc.gd_no}"
-				
-				# Count existing vouchers with the same base name (including cancelled ones)
-				existing_count = frappe.db.count(
+
+				# Get all names that match the pattern
+				existing = frappe.db.get_all(
 					"Landed Cost Voucher",
-					filters={"name": ["like", f"{base_name}%"]}
+					filters={"name": ["like", f"{base_name}%"]},
+					fields=["name"]
 				)
-				
-				if existing_count == 0:
-					# No duplicates found, use the base name
+				existing_names = {d.name for d in existing}
+				# Find the next available suffix
+				if base_name not in existing_names:
 					self.name = base_name
 				else:
-					# Add suffix based on count
-					self.name = f"{base_name}-{existing_count}"
-		
+					i = 1
+					while f"{base_name}-{i}" in existing_names:
+						i += 1
+					self.name = f"{base_name}-{i}"
+	
+
+	def validate_country_of_rigin(self):
+		if not self.custom_country_of_origin:
+			frappe.throw("Please Select Country Of Origin in Landed Cost Voucher")
+	 	
 	def validate(self):
 		
 		self.check_mandatory()
@@ -99,10 +109,28 @@ class CustomLandedCostVoucher(Document):
 			self.get_items_from_purchase_receipts()
 
 		# calculate import assessment if voucher type is import
+		"""
 		if self.custom_landed_cost_voucher_type == 'Import':
 			# If its an import voucher, in that case all charges will be applied systematically
 			# User cant add manually anything in it, to streamline the costing & regulatory compliance
 			#self.taxes = [] 
+			self.validate_country_of_rigin()
+			calculate_import_assessment(self)
+			self.distribute_charges_based_on = 'Distribute Manually'
+			self.set_applicable_import_charges()
+			#self.set_total_taxes_and_charges()
+			#self.distribute_charges_based_on = 'Distribute Manually'
+
+
+		self.set_applicable_charges_on_item()
+		"""
+	
+	def on_update(self):
+		if self.custom_landed_cost_voucher_type == 'Import':
+			# If its an import voucher, in that case all charges will be applied systematically
+			# User cant add manually anything in it, to streamline the costing & regulatory compliance
+			#self.taxes = [] 
+			self.validate_country_of_rigin()
 			calculate_import_assessment(self)
 			self.distribute_charges_based_on = 'Distribute Manually'
 			self.set_applicable_import_charges()

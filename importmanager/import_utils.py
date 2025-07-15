@@ -331,8 +331,10 @@ def get_taxes_by_category(tax_template_name):
 
 
 def calculate_import_taxes(lcv_item):
+    lcv_doc = frappe.get_cached_doc("Landed Cost Voucher",lcv_item.parent)
     item = frappe.get_cached_doc("Item",lcv_item.item_code)
-    tax_list = frappe.get_list("Item Tax Template",filters={'custom_customs_tariff_number':item.customs_tariff_number},
+    tax_list = frappe.get_list("Item Tax Template",filters={'custom_customs_tariff_number':item.customs_tariff_number,
+                                                            'custom_country_of_origin':lcv_doc.custom_country_of_origin},
                                fields=['name'],pluck='name')
     if len(tax_list) > 0:
         # get taxes here

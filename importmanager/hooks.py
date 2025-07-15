@@ -81,9 +81,26 @@ jinja = {
 
 fixtures = [
     {
-        "dt": "Import Charge Type",  # Export all custom fields
-        "filters": []
-    }
+        "doctype": "Custom Field",
+        "filters": [
+            ["dt", "=", "Item Tax Template"],
+            ["fieldname", "=", "custom_country_of_origin"]
+        ]
+    },
+    {
+        "doctype": "Custom Field",
+        "filters": [
+            ["dt", "=", "Landed Cost Voucher"],
+            ["fieldname", "=", "custom_country_of_origin"]
+        ]
+    },
+     {
+        "doctype": "Custom Field",
+        "filters": [
+            ["dt", "=", "Item Tax Template"],
+            ["fieldname", "=", "custom_apply_on_import_lcv"]
+        ]
+    },
 
 ]
 
