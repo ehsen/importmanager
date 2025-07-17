@@ -19,7 +19,47 @@ def create_journal_voucher(title, posting_date, accounts,import_document=None):
                      ]
     :return: Name of the created Journal Entry or an error message.
     """
-    
+    # Determine company from accounts or import_document
+    company = None
+    if import_document:
+        # Try to get company from ImportDoc or Landed Cost Voucher
+        try:
+            import_doc = frappe.get_doc("ImportDoc", import_document)
+            company = import_doc.company
+        except Exception:
+            try:
+                lcv_doc = frappe.get_doc("Landed Cost Voucher", import_document)
+                company = lcv_doc.company
+            except Exception:
+                pass
+    if not company and accounts:
+        # Try to get company from account (first account's company)
+        acc_name = accounts[0].get("account")
+        if acc_name:
+            company = frappe.get_cached_value("Account", acc_name, "company")
+    if not company:
+        frappe.throw("Unable to determine company for round off calculation.")
+
+    # 1. Round all amounts to nearest integer
+    for acc in accounts:
+        acc["debit"] = round(acc.get("debit", 0), 0)
+        acc["credit"] = round(acc.get("credit", 0), 0)
+
+    # 2. Calculate totals
+    total_debit = sum(acc.get("debit", 0) for acc in accounts)
+    total_credit = sum(acc.get("credit", 0) for acc in accounts)
+    diff = total_debit - total_credit
+
+    # 3. Add round off entry if needed
+    if abs(diff) > 0:
+        round_off_account = frappe.get_cached_value("Company", company, "round_off_account")
+        if not round_off_account:
+            frappe.throw("Please set Round Off Account in Company settings.")
+        if diff > 0:
+            accounts.append({"account": round_off_account, "debit": 0, "credit": abs(diff)})
+        else:
+            accounts.append({"account": round_off_account, "debit": abs(diff), "credit": 0})
+
     # Create a new Journal Entry document
     jv = frappe.new_doc("Journal Entry")
     jv.is_system_generated = 1 # All entries via this method shoudl be marked as system generated
@@ -38,13 +78,11 @@ def create_journal_voucher(title, posting_date, accounts,import_document=None):
             "cost_center": acc.get("cost_center", None),
             "party_type":acc.get("party_type",None),
             "party":acc.get("party",None),
-
         })
 
     # Validate and save the document
     jv.insert()
     jv.submit()
-    
     
     return f"Journal Entry '{jv.name}' created successfully."
 
