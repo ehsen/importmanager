@@ -239,6 +239,7 @@ def create_consolidated_import_taxes_jv(landed_cost_voucher):
         
         # Convert consolidated entries to list
         final_entries = list(consolidated_entries.values())
+        frappe.log_error(message=f"{final_entries}",title="final entries")
         
         # Create single JV for all tax entries
         create_journal_voucher(
@@ -300,7 +301,7 @@ def calculate_assessed_value(lcv_doc_item):
     
     ex_assess_value = lcv_doc_item.custom_assessed_value_per_unit * lcv_doc_item.qty
     lcv_doc_item.custom_cfr_value = ex_assess_value
-    lcv_doc_item.custom_landing_charges__1 = (ex_assess_value + lcv_doc_item.custom_insurance) * 0.01
+    lcv_doc_item.custom_landing_charges__1 = round((ex_assess_value + lcv_doc_item.custom_insurance) * 0.01,2)
     lcv_doc_item.custom_assessed_value = lcv_doc_item.custom_cfr_value + lcv_doc_item.custom_landing_charges__1 + lcv_doc_item.custom_insurance
     lcv_doc_item.custom_base_assessed_value = round(lcv_doc_item.custom_assessed_value * lcv_doc_item.custom_exchange_rate)
     
