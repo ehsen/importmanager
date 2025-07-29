@@ -75,7 +75,7 @@ app_license = "mit"
 
 # add methods and filters to jinja environment
 jinja = {
-	"methods": "importmanager.import_print_utils.fetch_jpg_from_charge_allocation",
+	"methods": "importmanager.import_print_utils.fetch_jpg_from_import_doc",
 # 	"filters": "importmanager.utils.jinja_filters"
 }
 
