@@ -4,6 +4,7 @@
  "creation": "2024-12-13 12:10:02.623771",
  "doctype": "DocType",
  "engine": "InnoDB",
+ "allow_import": 1,
  "field_order": [
   "charge_name",
   "account_head"
