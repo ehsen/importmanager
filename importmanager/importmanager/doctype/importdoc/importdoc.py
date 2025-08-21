@@ -5,18 +5,22 @@ import frappe
 from frappe.model.document import Document
 from importmanager.import_utils import update_data_in_import_doc
 from importmanager.importmanager.controllers.charge_allocation_controller import create_charge_allocation_entry
-
+from erpnext.accounts.utils import get_fiscal_year
 
 class ImportDoc(Document):
 	
 	def autoname(self):
 		if self.linked_purchase_order:
 			from datetime import datetime
-			current_year = datetime.now().strftime('%y')  # Gets current year as 2-digit number (e.g., '24' for 2024)
+			#current_year = datetime.now().strftime('%y')  # Gets current year as 2-digit number (e.g., '24' for 2024)
+			try:
+				fiscal_year = get_fiscal_year(self.date, company=self.company)[0]
+			except Exception:
+				frappe.throw("This date doesnt fall in any fiscal year list")
 			# Split the purchase order name by "-" and get the last element
 			po_number = self.linked_purchase_order.split("-")[-1]
 			# Create the import doc name with proper format including current year
-			self.name = f"ALP-IMD-{current_year}-{po_number}"
+			self.name = f"ALP-IMD-{fiscal_year}-{po_number}"
 		else:
 			frappe.throw("Please select a Linked Purchase Order")
 
