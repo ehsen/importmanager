@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import nowdate,datetime
+from erpnext.accounts.utils import get_fiscal_year as erp_get_fiscal_year
 from erpnext import get_default_cost_center
 from erpnext.controllers.taxes_and_totals import get_itemised_tax_breakup_data
 import time
@@ -911,36 +912,61 @@ def on_cancel_landed_cost_voucher(doc, method):
 
 
 
-# Function commented out to prevent naming conflicts
-# def autoname_purchase_invoice(doc, method):
-#     # Get current year as 2 digits
-#     current_year = datetime.datetime.now().strftime('%y')
-#     
-#     # Get company abbreviation
-#     company_abbr = doc.custom_abbr or ''
-#     
-#     # Handle different naming based on purchase invoice type
-#     if doc.custom_purchase_invoice_type == "Import":
-#         if doc.custom_import_document:
-#             import_doc = frappe.get_doc("ImportDoc", doc.custom_import_document)
-#             if import_doc.gd_no:
-#                 doc.name = f"{company_abbr}-IPI-{current_year}-{import_doc.gd_no}"
-#     
-#     elif doc.custom_purchase_invoice_type == "Local Purchase":
-#         if doc.is_return:
-#             # Local Purchase Return
-#             doc.name = make_autoname(f"{company_abbr}-LPI-RTN{current_year}-.#####")
-#         else:
-#             # Regular Local Purchase
-#             doc.name = make_autoname(f"{company_abbr}-LPI-{current_year}-.#####")
-#     
-#     elif doc.custom_purchase_invoice_type == "Import Service Charges":
-#         if doc.is_return:
-#             # Import Service Charges Return
-#             doc.name = make_autoname(f"{company_abbr}-SC-RTN-{current_year}-.#####")
-#         else:
-#             # Regular Import Service Charges
-#             doc.name = make_autoname(f"{company_abbr}-SC-{current_year}-.#####")
+def autoname_purchase_invoice(doc, method):
+    """
+    Autoname Purchase Invoice using fiscal year based on document date.
+    Uses existing naming logic, replacing current year with fiscal year name.
+    """
+    def ensure_unique_name(doctype, base_name):
+        """Append -1/-2/... if name exists."""
+        candidate = base_name
+        counter = 1
+        while frappe.db.exists(doctype, candidate):
+            candidate = f"{base_name}-{counter}"
+            counter += 1
+        return candidate
+    # Determine fiscal year based on posting_date and company
+    fiscal_year_name = None
+    try:
+        fy_info = erp_get_fiscal_year(doc.posting_date, company=doc.company, as_dict=True)
+        # fy_info can be a dict with key 'name' like '2024-2025'
+        if isinstance(fy_info, dict):
+            fiscal_year_name = fy_info.get('name')
+        elif isinstance(fy_info, (list, tuple)) and fy_info:
+            fiscal_year_name = fy_info[0]
+    except Exception:
+        pass
+
+    # Fallback to two-digit current year if fiscal year resolution fails
+    if not fiscal_year_name:
+        fiscal_year_name = datetime.datetime.now().strftime('%y')
+
+    # Get company abbreviation
+    company_abbr = doc.custom_abbr or ''
+
+    # Handle different naming based on purchase invoice type
+    if doc.custom_purchase_invoice_type == "Import":
+        if doc.custom_import_document:
+            import_doc = frappe.get_doc("ImportDoc", doc.custom_import_document)
+            if getattr(import_doc, 'gd_no', None):
+                base_name = f"{company_abbr}-IPI-{fiscal_year_name}-{import_doc.gd_no}"
+                doc.name = ensure_unique_name("Purchase Invoice", base_name)
+
+    elif doc.custom_purchase_invoice_type == "Local Purchase":
+        if doc.is_return:
+            # Local Purchase Return
+            doc.name = make_autoname(f"{company_abbr}-LPI-RTN{fiscal_year_name}-.#####")
+        else:
+            # Regular Local Purchase
+            doc.name = make_autoname(f"{company_abbr}-LPI-{fiscal_year_name}-.#####")
+
+    elif doc.custom_purchase_invoice_type == "Import Service Charges":
+        if doc.is_return:
+            # Import Service Charges Return
+            doc.name = make_autoname(f"{company_abbr}-SC-RTN-{fiscal_year_name}-.#####")
+        else:
+            # Regular Import Service Charges
+            doc.name = make_autoname(f"{company_abbr}-SC-{fiscal_year_name}-.#####")
 
 
 
