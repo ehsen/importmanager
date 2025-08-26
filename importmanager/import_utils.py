@@ -911,35 +911,36 @@ def on_cancel_landed_cost_voucher(doc, method):
 
 
 
-def autoname_purchase_invoice(doc, method):
-    # Get current year as 2 digits
-    current_year = datetime.datetime.now().strftime('%y')
-    
-    # Get company abbreviation
-    company_abbr = doc.custom_abbr or ''
-    
-    # Handle different naming based on purchase invoice type
-    if doc.custom_purchase_invoice_type == "Import":
-        if doc.custom_import_document:
-            import_doc = frappe.get_doc("ImportDoc", doc.custom_import_document)
-            if import_doc.gd_no:
-                doc.name = f"{company_abbr}-IPI-{current_year}-{import_doc.gd_no}"
-    
-    elif doc.custom_purchase_invoice_type == "Local Purchase":
-        if doc.is_return:
-            # Local Purchase Return
-            doc.name = make_autoname(f"{company_abbr}-LPI-RTN{current_year}-.#####")
-        else:
-            # Regular Local Purchase
-            doc.name = make_autoname(f"{company_abbr}-LPI-{current_year}-.#####")
-    
-    elif doc.custom_purchase_invoice_type == "Import Service Charges":
-        if doc.is_return:
-            # Import Service Charges Return
-            doc.name = make_autoname(f"{company_abbr}-SC-RTN-{current_year}-.#####")
-        else:
-            # Regular Import Service Charges
-            doc.name = make_autoname(f"{company_abbr}-SC-{current_year}-.#####")
+# Function commented out to prevent naming conflicts
+# def autoname_purchase_invoice(doc, method):
+#     # Get current year as 2 digits
+#     current_year = datetime.datetime.now().strftime('%y')
+#     
+#     # Get company abbreviation
+#     company_abbr = doc.custom_abbr or ''
+#     
+#     # Handle different naming based on purchase invoice type
+#     if doc.custom_purchase_invoice_type == "Import":
+#         if doc.custom_import_document:
+#             import_doc = frappe.get_doc("ImportDoc", doc.custom_import_document)
+#             if import_doc.gd_no:
+#                 doc.name = f"{company_abbr}-IPI-{current_year}-{import_doc.gd_no}"
+#     
+#     elif doc.custom_purchase_invoice_type == "Local Purchase":
+#         if doc.is_return:
+#             # Local Purchase Return
+#             doc.name = make_autoname(f"{company_abbr}-LPI-RTN{current_year}-.#####")
+#         else:
+#             # Regular Local Purchase
+#             doc.name = make_autoname(f"{company_abbr}-LPI-{current_year}-.#####")
+#     
+#     elif doc.custom_purchase_invoice_type == "Import Service Charges":
+#         if doc.is_return:
+#             # Import Service Charges Return
+#             doc.name = make_autoname(f"{company_abbr}-SC-RTN-{current_year}-.#####")
+#         else:
+#             # Regular Import Service Charges
+#             doc.name = make_autoname(f"{company_abbr}-SC-{current_year}-.#####")
 
 
 
