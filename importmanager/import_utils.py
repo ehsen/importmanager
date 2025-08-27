@@ -378,16 +378,19 @@ def calculate_import_taxes(lcv_item):
                                fields=['name'],pluck='name')
     if len(tax_list) > 0:
         # get taxes here
+        """
+        All GD taxes will be rounded off, we are forcing it from backend,
+        but I think it should be avoided, will be dealt later on
+        """
         tax_dict = get_taxes_by_category(tax_list[0])
         
-        frappe.log_error(message=f"tax list = {tax_list} {tax_dict} base_assessed_value = {lcv_item.custom_base_assessed_value}",title="testing taxes")
-        lcv_item.custom_cd = tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value
-        lcv_item.custom_acd = tax_dict.get('ACD',0)/100 * lcv_item.custom_base_assessed_value
-        amount_for_sales_tax = lcv_item.custom_base_assessed_value + lcv_item.custom_cd + lcv_item.custom_acd
-        lcv_item.custom_ast = tax_dict.get('AST',0)/100 * amount_for_sales_tax
-        lcv_item.custom_stamnt = tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax
-        amount_for_it = amount_for_sales_tax + lcv_item.custom_ast + lcv_item.custom_stamnt
-        lcv_item.custom_it = tax_dict.get('IT',0)/100 * amount_for_it
+        lcv_item.custom_cd = round(tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value,0)
+        lcv_item.custom_acd = round(tax_dict.get('ACD',0)/100 * lcv_item.custom_base_assessed_value,0)
+        amount_for_sales_tax = round(lcv_item.custom_base_assessed_value + lcv_item.custom_cd + lcv_item.custom_acd,0)
+        lcv_item.custom_ast = round(tax_dict.get('AST',0)/100 * amount_for_sales_tax,0)
+        lcv_item.custom_stamnt = round(tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax,0)
+        amount_for_it = round(amount_for_sales_tax + lcv_item.custom_ast + lcv_item.custom_stamnt,0)
+        lcv_item.custom_it = round(tax_dict.get('IT',0)/100 * amount_for_it,0)
         lcv_item.custom_total_duties_and_taxes = lcv_item.custom_cd+lcv_item.custom_acd+lcv_item.custom_stamnt + lcv_item.custom_ast+lcv_item.custom_it
         lcv_item.custom_base_assessment_difference = lcv_item.custom_base_assessed_value - lcv_item.amount
         lcv_item.applicable_charges = lcv_item.custom_base_assessment_difference + lcv_item.custom_cd + lcv_item.custom_acd

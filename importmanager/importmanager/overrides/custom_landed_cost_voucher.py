@@ -13,6 +13,7 @@ from importmanager.import_utils import calculate_import_assessment,create_import
 import erpnext
 from erpnext.controllers.taxes_and_totals import init_landed_taxes_and_totals
 from erpnext.stock.doctype.serial_no.serial_no import get_serial_nos
+from erpnext.accounts.utils import get_fiscal_year as erp_get_fiscal_year
 
 
 class CustomLandedCostVoucher(Document):
@@ -73,9 +74,22 @@ class CustomLandedCostVoucher(Document):
 			import_doc = frappe.get_doc("ImportDoc", self.custom_import_document)
 
 			if import_doc.gd_no:
-				# Get the 2-digit year using Frappe-style naming
-				current_year = frappe.utils.now_datetime().strftime('%y')
-				base_name = f"ALP-LCV-{current_year}-{import_doc.gd_no}"
+				# Use fiscal year (based on posting_date and company) in the name
+				fiscal_year_name = None
+				try:
+					fy_info = erp_get_fiscal_year(self.posting_date or frappe.utils.nowdate(), company=self.company, as_dict=True)
+					if isinstance(fy_info, dict):
+						fiscal_year_name = fy_info.get('name')
+					elif isinstance(fy_info, (list, tuple)) and fy_info:
+						fiscal_year_name = fy_info[0]
+				except Exception:
+					pass
+
+				# Fallback to two-digit current year if fiscal year resolution fails
+				if not fiscal_year_name:
+					fiscal_year_name = datetime.datetime.now().strftime('%y')
+
+				base_name = f"ALP-LCV-{fiscal_year_name}-{import_doc.gd_no}"
 
 				# Get all names that match the pattern
 				existing = frappe.db.get_all(
@@ -134,7 +148,10 @@ class CustomLandedCostVoucher(Document):
 			calculate_import_assessment(self)
 			self.distribute_charges_based_on = 'Distribute Manually'
 			self.set_applicable_import_charges()
-			#self.set_total_taxes_and_charges()
+			# Re-initialize ERPNext taxes/totals so base amounts are computed for new tax rows
+			init_landed_taxes_and_totals(self)
+			# Then compute total taxes and charges
+			self.set_total_taxes_and_charges()
 			#self.distribute_charges_based_on = 'Distribute Manually'
 
 
