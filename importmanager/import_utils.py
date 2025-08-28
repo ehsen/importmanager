@@ -4,6 +4,7 @@ from erpnext.accounts.utils import get_fiscal_year as erp_get_fiscal_year
 from erpnext import get_default_cost_center
 from erpnext.controllers.taxes_and_totals import get_itemised_tax_breakup_data
 import time
+from frappe.exceptions import TimestampMismatchError
 from frappe.model.naming import make_autoname
 
 def create_journal_voucher(title, posting_date, accounts,import_document=None):
@@ -750,28 +751,39 @@ def update_purchase_invoices(import_doc_name):
     import_doc.save()
 
 def update_data_in_import_doc(import_doc_name):
-    time.sleep(3)
-    doc = frappe.get_doc("ImportDoc",import_doc_name)
-    doc.items = []
-    doc.linked_import_charges = []
-    doc.linked_misc_import_charges = []
-    doc.linked_purchase_invoices = []
-    doc.save()
-    
-    update_purchase_invoices(import_doc_name)
-    update_line_items(import_doc_name)
-    bulk_update_import_charges(import_doc_name)
-    time.sleep(2)
-    doc = frappe.get_doc("ImportDoc",import_doc_name)
-    #frappe.log_error(message=f"hitted purchase invoice block {doc.linked_purchase_invoices}",title="linked_purchase invok")
-    if doc.linked_purchase_invoices:
-        
-        update_misc_import_charges(import_doc_name)
-    update_unallocated_misc_charges_jv(import_doc_name)
-    calculate_total_import_charges(import_doc_name)
-    if doc.linked_purchase_invoices:
-        allocate_import_charges(import_doc_name)
-    frappe.db.commit()
+    max_retries = 3
+    backoff_seconds = 1.0
+    attempt = 0
+    while True:
+        try:
+            time.sleep(3)
+            doc = frappe.get_doc("ImportDoc", import_doc_name)
+            doc.items = []
+            doc.linked_import_charges = []
+            doc.linked_misc_import_charges = []
+            doc.linked_purchase_invoices = []
+            doc.save()
+
+            update_purchase_invoices(import_doc_name)
+            update_line_items(import_doc_name)
+            bulk_update_import_charges(import_doc_name)
+            time.sleep(2)
+            doc = frappe.get_doc("ImportDoc", import_doc_name)
+            if doc.linked_purchase_invoices:
+                update_misc_import_charges(import_doc_name)
+            update_unallocated_misc_charges_jv(import_doc_name)
+            calculate_total_import_charges(import_doc_name)
+            if doc.linked_purchase_invoices:
+                allocate_import_charges(import_doc_name)
+            frappe.db.commit()
+            break
+        except TimestampMismatchError:
+            frappe.db.rollback()
+            attempt += 1
+            if attempt > max_retries:
+                raise
+            time.sleep(backoff_seconds)
+            backoff_seconds *= 2
 
 
 
