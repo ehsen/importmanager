@@ -17,8 +17,19 @@ class ImportDoc(Document):
 				fiscal_year = get_fiscal_year(self.date, company=self.company)[0]
 			except Exception:
 				frappe.throw("This date doesnt fall in any fiscal year list")
-			# Split the purchase order name by "-" and get the last element
-			po_number = self.linked_purchase_order.split("-")[-1]
+			
+			# Handle PO naming for both regular and cancelled POs
+			po_parts = self.linked_purchase_order.split("-")
+			
+			# Check if this is a cancelled PO (has more than 4 parts)
+			if len(po_parts) >= 4:
+				# For cancelled POs like "ACQ-IPO-26-0002-1", use "0002-1"
+				# Get the last two parts and join them
+				po_number = "-".join(po_parts[-2:])
+			else:
+				# For regular POs, use just the last part
+				po_number = po_parts[-1]
+			
 			# Create the import doc name with proper format including current year
 			self.name = f"ALP-IMD-{fiscal_year}-{po_number}"
 		else:
