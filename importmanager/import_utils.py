@@ -1,8 +1,10 @@
 import frappe
 from frappe.utils import nowdate,datetime
+from erpnext.accounts.utils import get_fiscal_year as erp_get_fiscal_year
 from erpnext import get_default_cost_center
 from erpnext.controllers.taxes_and_totals import get_itemised_tax_breakup_data
 import time
+from frappe.exceptions import TimestampMismatchError
 from frappe.model.naming import make_autoname
 
 def create_journal_voucher(title, posting_date, accounts,import_document=None):
@@ -377,16 +379,19 @@ def calculate_import_taxes(lcv_item):
                                fields=['name'],pluck='name')
     if len(tax_list) > 0:
         # get taxes here
+        """
+        All GD taxes will be rounded off, we are forcing it from backend,
+        but I think it should be avoided, will be dealt later on
+        """
         tax_dict = get_taxes_by_category(tax_list[0])
         
-        frappe.log_error(message=f"tax list = {tax_list} {tax_dict} base_assessed_value = {lcv_item.custom_base_assessed_value}",title="testing taxes")
-        lcv_item.custom_cd = tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value
-        lcv_item.custom_acd = tax_dict.get('ACD',0)/100 * lcv_item.custom_base_assessed_value
-        amount_for_sales_tax = lcv_item.custom_base_assessed_value + lcv_item.custom_cd + lcv_item.custom_acd
-        lcv_item.custom_ast = tax_dict.get('AST',0)/100 * amount_for_sales_tax
-        lcv_item.custom_stamnt = tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax
-        amount_for_it = amount_for_sales_tax + lcv_item.custom_ast + lcv_item.custom_stamnt
-        lcv_item.custom_it = tax_dict.get('IT',0)/100 * amount_for_it
+        lcv_item.custom_cd = round(tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value,0)
+        lcv_item.custom_acd = round(tax_dict.get('ACD',0)/100 * lcv_item.custom_base_assessed_value,0)
+        amount_for_sales_tax = round(lcv_item.custom_base_assessed_value + lcv_item.custom_cd + lcv_item.custom_acd,0)
+        lcv_item.custom_ast = round(tax_dict.get('AST',0)/100 * amount_for_sales_tax,0)
+        lcv_item.custom_stamnt = round(tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax,0)
+        amount_for_it = round(amount_for_sales_tax + lcv_item.custom_ast + lcv_item.custom_stamnt,0)
+        lcv_item.custom_it = round(tax_dict.get('IT',0)/100 * amount_for_it,0)
         lcv_item.custom_total_duties_and_taxes = lcv_item.custom_cd+lcv_item.custom_acd+lcv_item.custom_stamnt + lcv_item.custom_ast+lcv_item.custom_it
         lcv_item.custom_base_assessment_difference = lcv_item.custom_base_assessed_value - lcv_item.amount
         lcv_item.applicable_charges = lcv_item.custom_base_assessment_difference + lcv_item.custom_cd + lcv_item.custom_acd
@@ -746,28 +751,39 @@ def update_purchase_invoices(import_doc_name):
     import_doc.save()
 
 def update_data_in_import_doc(import_doc_name):
-    time.sleep(3)
-    doc = frappe.get_doc("ImportDoc",import_doc_name)
-    doc.items = []
-    doc.linked_import_charges = []
-    doc.linked_misc_import_charges = []
-    doc.linked_purchase_invoices = []
-    doc.save()
-    
-    update_purchase_invoices(import_doc_name)
-    update_line_items(import_doc_name)
-    bulk_update_import_charges(import_doc_name)
-    time.sleep(2)
-    doc = frappe.get_doc("ImportDoc",import_doc_name)
-    #frappe.log_error(message=f"hitted purchase invoice block {doc.linked_purchase_invoices}",title="linked_purchase invok")
-    if doc.linked_purchase_invoices:
-        
-        update_misc_import_charges(import_doc_name)
-    update_unallocated_misc_charges_jv(import_doc_name)
-    calculate_total_import_charges(import_doc_name)
-    if doc.linked_purchase_invoices:
-        allocate_import_charges(import_doc_name)
-    frappe.db.commit()
+    max_retries = 3
+    backoff_seconds = 1.0
+    attempt = 0
+    while True:
+        try:
+            time.sleep(3)
+            doc = frappe.get_doc("ImportDoc", import_doc_name)
+            doc.items = []
+            doc.linked_import_charges = []
+            doc.linked_misc_import_charges = []
+            doc.linked_purchase_invoices = []
+            doc.save()
+
+            update_purchase_invoices(import_doc_name)
+            update_line_items(import_doc_name)
+            bulk_update_import_charges(import_doc_name)
+            time.sleep(2)
+            doc = frappe.get_doc("ImportDoc", import_doc_name)
+            if doc.linked_purchase_invoices:
+                update_misc_import_charges(import_doc_name)
+            update_unallocated_misc_charges_jv(import_doc_name)
+            calculate_total_import_charges(import_doc_name)
+            if doc.linked_purchase_invoices:
+                allocate_import_charges(import_doc_name)
+            frappe.db.commit()
+            break
+        except TimestampMismatchError:
+            frappe.db.rollback()
+            attempt += 1
+            if attempt > max_retries:
+                raise
+            time.sleep(backoff_seconds)
+            backoff_seconds *= 2
 
 
 
@@ -912,34 +928,60 @@ def on_cancel_landed_cost_voucher(doc, method):
 
 
 def autoname_purchase_invoice(doc, method):
-    # Get current year as 2 digits
-    current_year = datetime.datetime.now().strftime('%y')
-    
+    """
+    Autoname Purchase Invoice using fiscal year based on document date.
+    Uses existing naming logic, replacing current year with fiscal year name.
+    """
+    def ensure_unique_name(doctype, base_name):
+        """Append -1/-2/... if name exists."""
+        candidate = base_name
+        counter = 1
+        while frappe.db.exists(doctype, candidate):
+            candidate = f"{base_name}-{counter}"
+            counter += 1
+        return candidate
+    # Determine fiscal year based on posting_date and company
+    fiscal_year_name = None
+    try:
+        fy_info = erp_get_fiscal_year(doc.posting_date, company=doc.company, as_dict=True)
+        # fy_info can be a dict with key 'name' like '2024-2025'
+        if isinstance(fy_info, dict):
+            fiscal_year_name = fy_info.get('name')
+        elif isinstance(fy_info, (list, tuple)) and fy_info:
+            fiscal_year_name = fy_info[0]
+    except Exception:
+        pass
+
+    # Fallback to two-digit current year if fiscal year resolution fails
+    if not fiscal_year_name:
+        fiscal_year_name = datetime.datetime.now().strftime('%y')
+
     # Get company abbreviation
     company_abbr = doc.custom_abbr or ''
-    
+
     # Handle different naming based on purchase invoice type
     if doc.custom_purchase_invoice_type == "Import":
         if doc.custom_import_document:
             import_doc = frappe.get_doc("ImportDoc", doc.custom_import_document)
-            if import_doc.gd_no:
-                doc.name = f"{company_abbr}-IPI-{current_year}-{import_doc.gd_no}"
-    
+            if getattr(import_doc, 'gd_no', None):
+                base_name = f"{company_abbr}-IPI-{fiscal_year_name}-{import_doc.gd_no}"
+                doc.name = ensure_unique_name("Purchase Invoice", base_name)
+
     elif doc.custom_purchase_invoice_type == "Local Purchase":
         if doc.is_return:
             # Local Purchase Return
-            doc.name = make_autoname(f"{company_abbr}-LPI-RTN{current_year}-.#####")
+            doc.name = make_autoname(f"{company_abbr}-LPI-RTN{fiscal_year_name}-.#####")
         else:
             # Regular Local Purchase
-            doc.name = make_autoname(f"{company_abbr}-LPI-{current_year}-.#####")
-    
+            doc.name = make_autoname(f"{company_abbr}-LPI-{fiscal_year_name}-.#####")
+
     elif doc.custom_purchase_invoice_type == "Import Service Charges":
         if doc.is_return:
             # Import Service Charges Return
-            doc.name = make_autoname(f"{company_abbr}-SC-RTN-{current_year}-.#####")
+            doc.name = make_autoname(f"{company_abbr}-SC-RTN-{fiscal_year_name}-.#####")
         else:
             # Regular Import Service Charges
-            doc.name = make_autoname(f"{company_abbr}-SC-{current_year}-.#####")
+            doc.name = make_autoname(f"{company_abbr}-SC-{fiscal_year_name}-.#####")
 
 
 
