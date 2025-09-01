@@ -21,13 +21,13 @@ class ImportDoc(Document):
 			# Handle PO naming for both regular and cancelled POs
 			po_parts = self.linked_purchase_order.split("-")
 			
-			# Check if this is a cancelled PO (has more than 4 parts)
-			if len(po_parts) >= 4:
+			# Check if this is a cancelled PO (has more than 4 parts or ends with a single digit)
+			if len(po_parts) > 4 or (len(po_parts) == 4 and po_parts[-1].isdigit() and len(po_parts[-1]) == 1):
 				# For cancelled POs like "ACQ-IPO-26-0002-1", use "0002-1"
 				# Get the last two parts and join them
 				po_number = "-".join(po_parts[-2:])
 			else:
-				# For regular POs, use just the last part
+				# For regular POs like "ACQ-IPO-25-0018", use just the last part "0018"
 				po_number = po_parts[-1]
 			
 			# Create the import doc name with proper format including current year
