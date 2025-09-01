@@ -32,7 +32,7 @@ class ImportDoc(Document):
 			
 			abbr = frappe.get_cached_doc("Company",self.company).abbr
 			# Create the import doc name with proper format including current year
-			self.name = f"{self.abbr}-IMD-{fiscal_year}-{po_number}"
+			self.name = f"{abbr}-IMD-{fiscal_year}-{po_number}"
 		else:
 			frappe.throw("Please select a Linked Purchase Order")
 
