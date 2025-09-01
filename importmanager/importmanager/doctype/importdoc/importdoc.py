@@ -30,8 +30,9 @@ class ImportDoc(Document):
 				# For regular POs like "ACQ-IPO-25-0018", use just the last part "0018"
 				po_number = po_parts[-1]
 			
+			abbr = frappe.get_cached_doc("Company",self.company).abbr
 			# Create the import doc name with proper format including current year
-			self.name = f"{self.custom_abbr}-IMD-{fiscal_year}-{po_number}"
+			self.name = f"{self.abbr}-IMD-{fiscal_year}-{po_number}"
 		else:
 			frappe.throw("Please select a Linked Purchase Order")
 
