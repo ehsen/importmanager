@@ -31,7 +31,7 @@ class ImportDoc(Document):
 				po_number = po_parts[-1]
 			
 			# Create the import doc name with proper format including current year
-			self.name = f"ALP-IMD-{fiscal_year}-{po_number}"
+			self.name = f"{self.custom_abbr}-IMD-{fiscal_year}-{po_number}"
 		else:
 			frappe.throw("Please select a Linked Purchase Order")
 
