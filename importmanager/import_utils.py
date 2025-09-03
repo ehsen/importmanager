@@ -420,15 +420,15 @@ def update_import_charges_in_import(doc):
 def update_line_items(import_doc_name):
     linked_items = []
     linked_pi = frappe.get_list("Purchase Invoice",filters={'docstatus':1,"custom_purchase_invoice_type":"Import",
-                                                               "custom_import_document":import_doc_name},fields=['name'],pluck='name')
+                                                               "custom_import_document":import_doc_name},fields=['name'],pluck='name',ignore_permissions=True)
     
-    linked_items = frappe.get_list('Purchase Invoice Item',filters={'parent':['in',linked_pi]},fields=['name'],pluck='name')
+    linked_items = frappe.get_list('Purchase Invoice Item',filters={'parent':['in',linked_pi]},fields=['name'],pluck='name',ignore_permissions=True)
     print(linked_items)
     import_doc = frappe.get_doc("ImportDoc",import_doc_name)
     data_dict = {}
     import_doc.items = []
     for item in linked_items:
-        pi_item = frappe.get_doc("Purchase Invoice Item",item)
+        pi_item = frappe.get_doc("Purchase Invoice Item",item,ignore_permissions=True)
         data_dict['purchase_invoice'] = pi_item.parent
         data_dict['item_code'] = pi_item.item_code
         data_dict['item_name'] = pi_item.item_name
@@ -441,7 +441,7 @@ def update_line_items(import_doc_name):
     import_doc.save()
 
 def get_customs_duty(import_doc_name):
-    lcv = frappe.get_list("Landed Cost Voucher",filters={'custom_import_document':import_doc_name, 'docstatus':1},fields=['name'],pluck='name')
+    lcv = frappe.get_list("Landed Cost Voucher",filters={'custom_import_document':import_doc_name, 'docstatus':1},fields=['name'],pluck='name',ignore_permissions=True)
     custom_duty = 0
     acd = 0
     cess = 0
@@ -467,7 +467,7 @@ def get_customs_duty(import_doc_name):
         }
     
     for item in lcv:
-        lcv_doc = frappe.get_doc("Landed Cost Voucher",item)
+        lcv_doc = frappe.get_doc("Landed Cost Voucher",item,ignore_permissions=True)
         for lcv_item in lcv_doc.items:
             custom_duty += lcv_item.custom_cd
             acd += lcv_item.custom_acd
@@ -493,12 +493,11 @@ def update_misc_import_charges(import_doc_name):
     # This function will fetch all charges not covered in service invoices
     # For now it ll deal with LC Charges/ Any Exchange Gains/Losses
     import_doc = frappe.get_doc("ImportDoc",import_doc_name)
-    lc_settlements = frappe.get_list("LC Settlement",filters={'import_document':import_doc_name,'docstatus':1},fields=[
-        'name','lc_charges','letter_of_credit_to_settle'
-    ])
+    lc_settlements = frappe.get_list("LC Settlement",filters={'import_document':import_doc_name,'docstatus':1},fields=['name','lc_charges','letter_of_credit_to_settle'],ignore_permissions=True
+    )
     print(lc_settlements)
     if len(lc_settlements) > 0:
-        lc_doc = frappe.get_doc("Letter Of Credit",lc_settlements[0]['letter_of_credit_to_settle'])
+        lc_doc = frappe.get_doc("Letter Of Credit",lc_settlements[0]['letter_of_credit_to_settle'],ignore_permissions=True)
         
         data_dict = {}
         for item in lc_settlements:
@@ -551,7 +550,7 @@ def update_unallocated_misc_charges_jv(import_doc_name):
     # Fetch submitted Journal Entries related to the ImportDoc
     journal_entries = frappe.get_list(
         "Journal Entry",
-        filters={"custom_import_document": import_doc_name, "docstatus": 1,'is_system_generated':0},
+        filters={"custom_import_document": import_doc_name, "docstatus": 1,'is_system_generated':0},ignore_permissions=True,
         fields=["name"]
     )
     
@@ -561,7 +560,7 @@ def update_unallocated_misc_charges_jv(import_doc_name):
 
     # Process each Journal Entry and update misc import charges
     for je in journal_entries:
-        je_doc = frappe.get_doc("Journal Entry", je["name"])
+        je_doc = frappe.get_doc("Journal Entry", je["name"],ignore_permissions=True)
         for account in je_doc.accounts:
             if account.debit_in_account_currency > 0:
                 # Prepare misc charges entry
@@ -589,13 +588,13 @@ def update_unallocated_misc_charges_jv(import_doc_name):
 
 def bulk_update_import_charges(import_doc_name):
     linked_pi = frappe.get_list("Purchase Invoice",filters={'docstatus':1,"custom_purchase_invoice_type":"Import Service Charges",
-                                                               "custom_import_document":import_doc_name},fields=['name'],pluck='name')
+                                                               "custom_import_document":import_doc_name},fields=['name'],pluck='name',ignore_permissions=True)
 
     
 
     for item in linked_pi:
         
-        update_import_charges_in_import(frappe.get_doc("Purchase Invoice",item))
+        update_import_charges_in_import(frappe.get_doc("Purchase Invoice",item,ignore_permissions=True))
 
 
     #frappe.db.commit()
@@ -626,17 +625,17 @@ def calculate_total_import_charges(import_doc_name):
 
     import_doc.save()
 
-def get_landed_cost_item(import_doc_name,purchase_receipt_item):
+def get_landed_cost_item(import_doc_name,purchase_receipt_item,ignore_permissions=False):
     """
     This function will return the appropirately landed cost item for PR/PI Item if avialable, to 
     extract the import_related_charges from it
     """
     lcv_item = frappe.get_list("Landed Cost Item",filters={'purchase_receipt_item':purchase_receipt_item,'docstatus':1},fields=['name'],
-                               pluck='name')
+                               pluck='name',ignore_permissions=True)
     print(f"lcv item is {lcv_item}")
     if len(lcv_item) == 0:
         return None
-    return frappe.get_doc("Landed Cost Item",lcv_item[0])
+    return frappe.get_doc("Landed Cost Item",lcv_item[0],ignore_permissions=True)
 
 def allocate_import_charges(import_doc_name):
     # Import Charges Will be allocated proporitanlly as per item amount
@@ -659,8 +658,8 @@ def allocate_import_charges(import_doc_name):
         for item in import_doc.items:
             item_customs_duty = 0
             item_sales_tax = 0
-            lcv_item = get_landed_cost_item(import_doc_name,item.purchase_receipt_item)
-            
+            lcv_item = get_landed_cost_item(import_doc_name,item.purchase_receipt_item,ignore_permissions=True)
+
 
 
             if item.item_code in item_wise_total_duty.keys():
