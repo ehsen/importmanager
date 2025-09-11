@@ -777,7 +777,7 @@ def update_data_in_import_doc(import_doc_name):
             frappe.db.commit()
             break
         except TimestampMismatchError:
-            frappe.db.rollback()
+            #frappe.db.rollback()
             attempt += 1
             if attempt > max_retries:
                 raise
