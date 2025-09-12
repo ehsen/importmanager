@@ -752,7 +752,7 @@ def update_purchase_invoices(import_doc_name):
 def update_data_in_import_doc(import_doc_name):
     # Prevent concurrent updates
     if frappe.db.get_value("ImportDoc", import_doc_name, "custom_updating"):
-        "Already updating, skip"
+        print("Already updating, skip")
         return  # Already updating, skip
     
     # Set updating flag
@@ -760,26 +760,28 @@ def update_data_in_import_doc(import_doc_name):
     frappe.db.commit()
     
     try:
-        # Your existing logic (remove the while loop and sleep calls)
+        print("Updating Import Doc")
         doc = frappe.get_doc("ImportDoc", import_doc_name)
         doc.items = []
         doc.linked_import_charges = []
         doc.linked_misc_import_charges = []
         doc.linked_purchase_invoices = []
         doc.save()
-        
+        print("Updated Import Doc")
         update_purchase_invoices(import_doc_name)
         update_line_items(import_doc_name)
         bulk_update_import_charges(import_doc_name)
-        
+        print("Updated Import Charges")
         doc.reload()
         if doc.linked_purchase_invoices:
             update_misc_import_charges(import_doc_name)
+        print("Updated Misc Import Charges")
         update_unallocated_misc_charges_jv(import_doc_name)
         calculate_total_import_charges(import_doc_name)
+        print("Updated Total Import Charges")
         if doc.linked_purchase_invoices:
             allocate_import_charges(import_doc_name)
-    
+        print("Updated Allocate Import Charges")
     except Exception as e:
         frappe.log_error(f"ImportDoc update failed: {str(e)}", f"ImportDoc {import_doc_name}")
         raise
@@ -787,7 +789,7 @@ def update_data_in_import_doc(import_doc_name):
         # Clear updating flag
         frappe.db.set_value("ImportDoc", import_doc_name, "custom_updating", 0)
         frappe.db.commit()
-
+    print("Import Doc updated")
 
 
 def generate_outstanding_payments_report():
