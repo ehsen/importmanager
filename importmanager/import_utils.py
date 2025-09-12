@@ -751,9 +751,11 @@ def update_purchase_invoices(import_doc_name):
 
 def update_data_in_import_doc(import_doc_name):
     # Prevent concurrent updates
-    if frappe.db.get_value("ImportDoc", import_doc_name, "custom_updating"):
+    updating_status = frappe.db.get_value("ImportDoc", import_doc_name, "custom_updating")
+    if updating_status == 1:  # Explicitly check for 1, not truthy
         print("Already updating, skip")
-        return  # Already updating, skip
+        frappe.log_error(f"ImportDoc {import_doc_name} already being updated", "Duplicate Update Prevented")
+        return
     
     # Set updating flag
     frappe.db.set_value("ImportDoc", import_doc_name, "custom_updating", 1)
