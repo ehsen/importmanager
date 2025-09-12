@@ -752,6 +752,7 @@ def update_purchase_invoices(import_doc_name):
 def update_data_in_import_doc(import_doc_name):
     # Prevent concurrent updates
     if frappe.db.get_value("ImportDoc", import_doc_name, "custom_updating"):
+        "Already updating, skip"
         return  # Already updating, skip
     
     # Set updating flag
