@@ -750,39 +750,42 @@ def update_purchase_invoices(import_doc_name):
     import_doc.save()
 
 def update_data_in_import_doc(import_doc_name):
-    max_retries = 3
-    backoff_seconds = 1.0
-    attempt = 0
-    while True:
-        try:
-            time.sleep(3)
-            doc = frappe.get_doc("ImportDoc", import_doc_name)
-            doc.items = []
-            doc.linked_import_charges = []
-            doc.linked_misc_import_charges = []
-            doc.linked_purchase_invoices = []
-            doc.save()
-
-            update_purchase_invoices(import_doc_name)
-            update_line_items(import_doc_name)
-            bulk_update_import_charges(import_doc_name)
-            time.sleep(2)
-            doc = frappe.get_doc("ImportDoc", import_doc_name)
-            if doc.linked_purchase_invoices:
-                update_misc_import_charges(import_doc_name)
-            update_unallocated_misc_charges_jv(import_doc_name)
-            calculate_total_import_charges(import_doc_name)
-            if doc.linked_purchase_invoices:
-                allocate_import_charges(import_doc_name)
-            frappe.db.commit()
-            break
-        except TimestampMismatchError:
-            #frappe.db.rollback()
-            attempt += 1
-            if attempt > max_retries:
-                raise
-            time.sleep(backoff_seconds)
-            backoff_seconds *= 2
+    # Prevent concurrent updates
+    if frappe.db.get_value("ImportDoc", import_doc_name, "custom_updating"):
+        return  # Already updating, skip
+    
+    # Set updating flag
+    frappe.db.set_value("ImportDoc", import_doc_name, "custom_updating", 1)
+    frappe.db.commit()
+    
+    try:
+        # Your existing logic (remove the while loop and sleep calls)
+        doc = frappe.get_doc("ImportDoc", import_doc_name)
+        doc.items = []
+        doc.linked_import_charges = []
+        doc.linked_misc_import_charges = []
+        doc.linked_purchase_invoices = []
+        doc.save()
+        
+        update_purchase_invoices(import_doc_name)
+        update_line_items(import_doc_name)
+        bulk_update_import_charges(import_doc_name)
+        
+        doc.reload()
+        if doc.linked_purchase_invoices:
+            update_misc_import_charges(import_doc_name)
+        update_unallocated_misc_charges_jv(import_doc_name)
+        calculate_total_import_charges(import_doc_name)
+        if doc.linked_purchase_invoices:
+            allocate_import_charges(import_doc_name)
+    
+    except Exception as e:
+        frappe.log_error(f"ImportDoc update failed: {str(e)}", f"ImportDoc {import_doc_name}")
+        raise
+    finally:
+        # Clear updating flag
+        frappe.db.set_value("ImportDoc", import_doc_name, "custom_updating", 0)
+        frappe.db.commit()
 
 
 
@@ -830,96 +833,42 @@ def generate_outstanding_payments_report():
 
 
 def on_submit_purchase_invoice(doc, method):
-    """
-    Hook for Purchase Invoice on_submit event.
-    Updates the import doc data if custom_import_document is set.
-    """
     if doc.custom_import_document:
-        # Defer the update to happen after the document is submitted
-        frappe.enqueue(
-            'importmanager.import_utils.update_data_in_import_doc',
-            import_doc_name=doc.custom_import_document,
-            queue='short',
-            timeout=300,
-            now=False
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.custom_import_document)
         )
 
 def on_cancel_purchase_invoice(doc, method):
-    """
-    Hook for Purchase Invoice on_cancel event.
-    Updates the import doc data if custom_import_document is set.
-    """
     if doc.custom_import_document:
-        # Defer the update to happen after the document is cancelled
-        frappe.enqueue(
-            'importmanager.import_utils.update_data_in_import_doc',
-            import_doc_name=doc.custom_import_document,
-            queue='short',
-            timeout=300,
-            now=False
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.custom_import_document)
         )
 
 def on_submit_journal_entry(doc, method):
-    """
-    Hook for Journal Entry on_submit event.
-    Updates the import doc data if custom_import_document is set.
-    """
     if doc.custom_import_document:
-        # Defer the update to happen after the document is submitted
-        frappe.enqueue(
-            'importmanager.import_utils.update_data_in_import_doc',
-            import_doc_name=doc.custom_import_document,
-            queue='short',
-            timeout=300,
-            now=False
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.custom_import_document)
         )
 
 def on_cancel_journal_entry(doc, method):
-    """
-    Hook for Journal Entry on_cancel event.
-    Updates the import doc data if custom_import_document is set.
-    """
     if doc.custom_import_document:
-        # Defer the update to happen after the document is cancelled
-        frappe.enqueue(
-            'importmanager.import_utils.update_data_in_import_doc',
-            import_doc_name=doc.custom_import_document,
-            queue='short',
-            timeout=300,
-            now=False
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.custom_import_document)
         )
 
 def on_submit_landed_cost_voucher(doc, method):
-    """
-    Hook for Landed Cost Voucher on_submit event.
-    Updates the import doc data if custom_import_document is set.
-    """
     if doc.custom_import_document:
         # Create import taxes JVs
         #create_import_taxes_jv(doc.name)
         
-        # Defer the update to happen after the document is submitted
-        frappe.enqueue(
-            'importmanager.import_utils.update_data_in_import_doc',
-            import_doc_name=doc.custom_import_document,
-            queue='short',
-            timeout=300,
-            now=False
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.custom_import_document)
         )
 
 def on_cancel_landed_cost_voucher(doc, method):
-    """
-    Hook for Landed Cost Voucher on_cancel event.
-    Updates the import doc data if custom_import_document is set.
-    """
     if doc.custom_import_document:
-        # Defer the update to happen after the document is cancelled
-        frappe.enqueue(
-            'importmanager.import_utils.update_data_in_import_doc',
-            import_doc_name=doc.custom_import_document,
-            queue='short',
-            timeout=300,
-            now=False
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.custom_import_document)
         )
 
 
