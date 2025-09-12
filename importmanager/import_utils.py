@@ -863,6 +863,7 @@ def on_cancel_journal_entry(doc, method):
 
 def on_submit_landed_cost_voucher(doc, method):
     if doc.custom_import_document:
+        print("Updating Import Doc on submit LCV")
         # Create import taxes JVs
         #create_import_taxes_jv(doc.name)
         
