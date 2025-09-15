@@ -633,6 +633,7 @@ def get_landed_cost_item(import_doc_name,purchase_receipt_item,ignore_permission
     lcv_item = frappe.get_list("Landed Cost Item",filters={'purchase_receipt_item':purchase_receipt_item,'docstatus':1},fields=['name'],
                                pluck='name',ignore_permissions=True)
     print(f"lcv item is {lcv_item}")
+
     if len(lcv_item) == 0:
         return None
     return frappe.get_doc("Landed Cost Item",lcv_item[0],ignore_permissions=True)
@@ -862,7 +863,8 @@ def on_cancel_journal_entry(doc, method):
         )
 
 def on_submit_landed_cost_voucher(doc, method):
-    
+    time.sleep(2)
+    frappe.db.commit()
     if doc.custom_import_document:
         time.sleep(5)
         print("Updating Import Doc on submit LCV")
