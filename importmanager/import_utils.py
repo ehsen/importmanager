@@ -659,7 +659,7 @@ def allocate_import_charges(import_doc_name):
     
     # Allocate Charges. Services Sales Tax, will distributed Proporionately to all items
     print(f"ImportDOc Total Import Charges {import_doc.total_import_charges}")
-    if import_doc.total_import_charges > 0:
+    if import_doc.total_import_charges >= 0:
         total_items_amount = sum(row.amount for row in import_doc.items)
         for item in import_doc.items:
             item_customs_duty = 0
