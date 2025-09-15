@@ -645,10 +645,12 @@ def allocate_import_charges(import_doc_name):
     #TODO: This function should striclty be tested for ImportDoc where multiple Items are added
     # TODO: This function shoudl be optimzied the way it pulls the import charges from LCV. 
     
+    time.sleep(3)
     print('allocate import charges executed')
     import_doc = frappe.get_doc("ImportDoc",import_doc_name)
     import_taxes_data = get_customs_duty(import_doc_name)
     item_wise_total_duty = import_taxes_data['item_wise_duty']
+    print(f"Item Wise Total Duty {item_wise_total_duty}")
     # Update Totals In Import Doc
 
     import_doc.sales_tax_on_import = import_taxes_data['total']['stamnt']+import_taxes_data['total']['ast']
@@ -656,6 +658,7 @@ def allocate_import_charges(import_doc_name):
     import_doc.total_import_value = import_doc.total_cost + import_doc.sales_tax_on_import+import_doc.sales_tax_on_services + import_doc.total_income_tax
     
     # Allocate Charges. Services Sales Tax, will distributed Proporionately to all items
+    print(f"ImportDOc Total Import Charges {import_doc.total_import_charges}")
     if import_doc.total_import_charges > 0:
         total_items_amount = sum(row.amount for row in import_doc.items)
         for item in import_doc.items:
