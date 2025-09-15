@@ -519,7 +519,7 @@ def update_misc_import_charges(import_doc_name):
     print(f"lcv data is {lcv_data}")
     print(f"Total Custom Duty is {total_customs_duty}")
     # Only add customs duty entries if there are actual LCV documents
-    if total_customs_duty > 0 and lcv_doc:
+    if total_customs_duty >= 0 and lcv_doc:
         import_doc.append("linked_misc_import_charges", {'import_charge_type':'Customs Duty',
         'amount':total_customs_duty,'document_type':'Landed Cost Voucher','document_name':lcv_doc,
         'paid_to':'Pakistan Customs'})
