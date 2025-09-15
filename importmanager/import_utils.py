@@ -667,17 +667,17 @@ def allocate_import_charges(import_doc_name):
             lcv_item = get_landed_cost_item(import_doc_name,item.purchase_receipt_item,ignore_permissions=True)
 
 
-            print('starting item wise calculation')
+            
             if item.item_code in item_wise_total_duty.keys():
-                print(f"{item.item_code}------")
+                
                 item_customs_duty += (item_wise_total_duty[item.item_code]['custom_duty']+item_wise_total_duty[item.item_code]['acd'])
                 item_sales_tax += (item_wise_total_duty[item.item_code]['stamnt']+item_wise_total_duty[item.item_code]['ast'])
             item.allocated_charges_ex_cd = (item.amount/total_items_amount * (import_doc.total_import_charges-import_doc.total_customs_duty)) or 0
             item.allocated_import_charges = item_customs_duty + item.allocated_charges_ex_cd
-            print(f"item wise Allocated Import Charges EX CD {item.allocated_charges_ex_cd}")
-            print(f"Allocated Import Charg {item_customs_duty}")
+            
+            
             item.net_unit_cost = (item.allocated_import_charges + item.amount)/item.qty
-            print(f" Net unit cost {item.net_unit_cost}")
+            
             item.st_unit_cost = 0
             allocated_service_sales_tax = (item.amount/total_items_amount) * import_doc.sales_tax_on_services
         
@@ -759,6 +759,7 @@ def update_purchase_invoices(import_doc_name):
     # Save the ImportDoc
     import_doc.save()
 
+@frappe.whitelist()
 def update_data_in_import_doc(import_doc_name):
     # Prevent concurrent updates
     updating_status = frappe.db.get_value("ImportDoc", import_doc_name, "custom_updating")
@@ -872,11 +873,11 @@ def on_cancel_journal_entry(doc, method):
         )
 
 def on_submit_landed_cost_voucher(doc, method):
-    time.sleep(2)
-    frappe.db.commit()
+    
+    
     if doc.custom_import_document:
-        time.sleep(5)
-        print("Updating Import Doc on submit LCV")
+        
+        
         # Create import taxes JVs
         #create_import_taxes_jv(doc.name)
         
