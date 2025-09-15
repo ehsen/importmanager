@@ -516,6 +516,7 @@ def update_misc_import_charges(import_doc_name):
     total_cess = custom_data['cess']
     lcv_doc = lcv_data['landed_cost_voucher_name']
     
+    print(f"lcv data is {lcv_data}")
     print(f"Total Custom Duty is {total_customs_duty}")
     # Only add customs duty entries if there are actual LCV documents
     if total_customs_duty > 0 and lcv_doc:
