@@ -669,11 +669,15 @@ def allocate_import_charges(import_doc_name):
 
 
             if item.item_code in item_wise_total_duty.keys():
+                print(f"{item.item_code}------")
                 item_customs_duty += (item_wise_total_duty[item.item_code]['custom_duty']+item_wise_total_duty[item.item_code]['acd'])
                 item_sales_tax += (item_wise_total_duty[item.item_code]['stamnt']+item_wise_total_duty[item.item_code]['ast'])
             item.allocated_charges_ex_cd = (item.amount/total_items_amount * (import_doc.total_import_charges-import_doc.total_customs_duty)) or 0
             item.allocated_import_charges = item_customs_duty + item.allocated_charges_ex_cd
+            print(f"Allocated Import Charges EX CD {item.allocated_import_charges_ex_cd}")
+            print(f"Allocated Import Charg {item.custom_import_dutu}")
             item.net_unit_cost = (item.allocated_import_charges + item.amount)/item.qty
+            print(f" Net unit cost {item.net_unit_cost}")
             item.st_unit_cost = 0
             allocated_service_sales_tax = (item.amount/total_items_amount) * import_doc.sales_tax_on_services
         
