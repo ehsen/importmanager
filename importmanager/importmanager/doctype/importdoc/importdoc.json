@@ -35,7 +35,8 @@
   "item_wise_costing_tab",
   "items",
   "status",
-  "amended_from"
+  "amended_from",
+  "custom_updating"
  ],
  "fields": [
   {
@@ -72,8 +73,10 @@
   {
    "fieldname": "linked_purchase_invoices",
    "fieldtype": "Table",
+   "ignore_user_permissions": 1,
    "label": "Linked Purchase Invoices",
-   "options": "Linked Purchase Invoices"
+   "options": "Linked Purchase Invoices",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_nz56",
@@ -222,11 +225,16 @@
    "hidden": 1,
    "label": "Status",
    "read_only": 1
+  },
+  {
+   "fieldname": "custom_updating",
+   "fieldtype": "Int",
+   "label": "Custom Updating"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-03-17 10:39:37.420754",
+ "modified": "2025-09-11 14:31:45.064067",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "ImportDoc",
@@ -254,6 +262,18 @@
    "read": 1,
    "report": 1,
    "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase Manager",
    "share": 1,
    "write": 1
   }
