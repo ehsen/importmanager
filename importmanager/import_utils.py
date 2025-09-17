@@ -419,7 +419,7 @@ def calculate_import_taxes(lcv_item):
         amount_for_sales_tax = round(lcv_item.custom_base_assessed_value + lcv_item.custom_cd + lcv_item.custom_acd,0)
         lcv_item.custom_ast = round(tax_dict.get('AST',0)/100 * amount_for_sales_tax,0)
         lcv_item.custom_stamnt = round(tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax,0)
-        amount_for_it = round(amount_for_sales_tax + lcv_item.custom_ast + lcv_item.custom_stamnt,0)
+        amount_for_it = round(amount_for_sales_tax + lcv_item.custom_ast + lcv_item.custom_stamnt,0) + lcv_item.custom_fixed_surcharge_ait
         lcv_item.custom_it = round(tax_dict.get('IT',0)/100 * amount_for_it,0)
         lcv_item.custom_total_duties_and_taxes = lcv_item.custom_cd+lcv_item.custom_acd+lcv_item.custom_stamnt + lcv_item.custom_ast+lcv_item.custom_it
         lcv_item.custom_base_assessment_difference = lcv_item.custom_base_assessed_value - lcv_item.amount
