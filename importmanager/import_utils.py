@@ -360,16 +360,45 @@ def calculate_import_assessment(lcv_doc):
 
 def get_taxes_by_category(tax_template_name):
     query = """
-            select custom_tax_category,tax_rate from `tabItem Tax Template Detail` where parent = '{tax_template_name}';
+            select custom_tax_category,tax_rate,custom_fixed_tax_amount,custom_fixed_tax_basis,custom_fixed_tax_uom from `tabItem Tax Template Detail` where parent = '{tax_template_name}';
             """.format(tax_template_name=tax_template_name)
     result = frappe.db.sql(query,as_dict=1)
     taxes_dict = {}
+    fixed_taxes = {}
     for item in result:
+        fixed_tax_dict = {}
         taxes_dict[item['custom_tax_category']] = item['tax_rate']
+        
+        fixed_tax_dict['custom_fixed_tax_amount'] = item['custom_fixed_tax_amount']
+        fixed_tax_dict['custom_fixed_tax_basis'] = item['custom_fixed_tax_basis']
+        fixed_tax_dict['custom_fixed_tax_uom'] = item['custom_fixed_tax_uom']
+
+        fixed_taxes[item['custom_tax_category']] = fixed_tax_dict
+        
     
+    
+            
+    taxes_dict['fixed_taxes'] = fixed_taxes
     return taxes_dict
 
+def get_fixed_tax_amount_by_category(tax_dict,tax_category,lcv_item):
+    fixed_taxes = tax_dict.get('fixed_taxes',{})
+    fixed_tax_dict = fixed_taxes.get(tax_category,0)
+    fixed_tax_amount = fixed_tax_dict.get('custom_fixed_tax_amount')
+    if fixed_tax_amount <= 0:
+        return 0
+    
+    fixed_tax_basis = fixed_tax_dict.get('custom_fixed_tax_basis',0)
+    fixed_tax_uom = fixed_tax_dict.get('custom_fixed_tax_uom',0)
+    if lcv_item.custom_quantity_unit_type != fixed_tax_uom:
+        return 0
+    
+    final_fixed_tax_calculation = lcv_item.custom_no_of_units * fixed_tax_amount
 
+    return final_fixed_tax_calculation
+
+def get_fixed_tax_amount(lcv_item):
+    pass
 
 def calculate_import_taxes(lcv_item):
     lcv_doc = frappe.get_cached_doc("Landed Cost Voucher",lcv_item.parent)
@@ -385,7 +414,7 @@ def calculate_import_taxes(lcv_item):
         """
         tax_dict = get_taxes_by_category(tax_list[0])
         
-        lcv_item.custom_cd = round(tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value,0)
+        lcv_item.custom_cd = round((tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value)+get_fixed_tax_amount_by_category(tax_dict,'CD',lcv_item),0)
         lcv_item.custom_acd = round(tax_dict.get('ACD',0)/100 * lcv_item.custom_base_assessed_value,0)
         amount_for_sales_tax = round(lcv_item.custom_base_assessed_value + lcv_item.custom_cd + lcv_item.custom_acd,0)
         lcv_item.custom_ast = round(tax_dict.get('AST',0)/100 * amount_for_sales_tax,0)
