@@ -83,48 +83,18 @@ fixtures = [
     {
         "doctype": "Custom Field",
         "filters": [
-            ["dt", "=", "Item Tax Template"],
-            ["fieldname", "=", "custom_country_of_origin"]
-        ]
-    },
-    {
-        "doctype": "Custom Field",
-        "filters": [
-            ["dt", "=", "Landed Cost Voucher"],
-            ["fieldname", "=", "custom_country_of_origin"]
-        ]
-    },
-     {
-        "doctype": "Custom Field",
-        "filters": [
-            ["dt", "=", "Item Tax Template"],
-            ["fieldname", "=", "custom_apply_on_import_lcv"]
+        
+            ["module", "=", "Importmanager"]
         ]
     },
     {
         "doctype": "Property Setter",
         "filters": [
-            ["doc_type", "=", "Purchase Order Item"],
-            ["field_name", "=", "rate"],
-            ["property", "=", "precision"]
+            
+            ["module", "=", "Importmanager"]
         ]
     },
-    {
-        "doctype": "Property Setter",
-        "filters": [
-            ["doc_type", "=", "Purchase Order Item"],
-            ["field_name", "=", "amount"],
-            ["property", "=", "precision"]
-        ]
-    },
-       {
-        "doctype": "Property Setter",
-        "filters": [
-            ["doc_type", "=", "Purchase Invoice Item"],
-            ["field_name", "=", "amount"],
-            ["property", "=", "precision"]
-        ]
-    },
+     
 
 ]
 
