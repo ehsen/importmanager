@@ -101,6 +101,9 @@ fixtures = [
             ["name", "=", "Import WorkFlow"]
         ]
     },
+    {
+        "doctype": "Workflow State"
+    },
      
 
 ]
