@@ -26,7 +26,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/importmanager/css/importmanager.css"
-# app_include_js = "/assets/importmanager/js/importmanager.js"
+app_include_js = "/assets/importmanager/js/importdoc_filter.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/importmanager/css/importmanager.css"
@@ -92,6 +92,13 @@ fixtures = [
         "filters": [
             
             ["module", "=", "Importmanager"]
+        ]
+    },
+    {
+        "doctype": "Workflow",
+        "filters": [
+        
+            ["name", "=", "Import WorkFlow"]
         ]
     },
      
