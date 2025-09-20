@@ -463,7 +463,7 @@ def calculate_import_taxes(lcv_item):
         lcv_item.custom_ast = custom_ast
 
         frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_stamnt', custom_stamnt)
-        lcv_item.stamnt = custom_stamnt
+        lcv_item.custom_stamnt = custom_stamnt
 
 
         amount_for_it = round(amount_for_sales_tax + custom_ast + custom_stamnt,0) + lcv_item.custom_fixed_surcharge_ait
