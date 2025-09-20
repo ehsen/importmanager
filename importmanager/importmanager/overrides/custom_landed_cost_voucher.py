@@ -140,6 +140,7 @@ class CustomLandedCostVoucher(Document):
 		"""
 	
 	def on_update(self):
+		
 		if self.custom_landed_cost_voucher_type == 'Import':
 			# If its an import voucher, in that case all charges will be applied systematically
 			# User cant add manually anything in it, to streamline the costing & regulatory compliance
@@ -156,6 +157,8 @@ class CustomLandedCostVoucher(Document):
 
 
 		self.set_applicable_charges_on_item()
+		
+		pass
 
 	def apply_assessment_difference_and_duty(self):
 		"""
