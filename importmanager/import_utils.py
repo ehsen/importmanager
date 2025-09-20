@@ -374,6 +374,8 @@ def calculate_import_assessment(lcv_doc):
     for item in lcv_doc.items:
         
         calculate_assessed_value(item)
+        frappe.db.commit()
+        
         calculate_import_taxes(item)
         #lcv_doc.save()
         #frappe.db.commit()
@@ -454,6 +456,7 @@ def calculate_import_taxes(lcv_item):
         
 
         amount_for_sales_tax = round(lcv_item.custom_base_assessed_value + custom_cd + custom_acd,0)
+        frappe.log_error(message=f"amount for sales tax is {amount_for_sales_tax}",title="sales tax amount")
         custom_ast = round(tax_dict.get('AST',0)/100 * amount_for_sales_tax,0)
         custom_stamnt = round(tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax,0)
         frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_ast', custom_ast)
@@ -478,6 +481,7 @@ def calculate_import_taxes(lcv_item):
         lcv_item.custom_base_assessment_difference = custom_base_assessment_difference
 
         lcv_item.applicable_charges = lcv_item.custom_base_assessment_difference + lcv_item.custom_cd + lcv_item.custom_acd
+        frappe.db.set_value("Landed Cost Item", lcv_item.name, 'applicable_charges', lcv_item.applicable_charges)
         # Following asserrtion must pass if all above calculations are correct
         assert(lcv_item.amount + lcv_item.custom_base_assessment_difference == lcv_item.custom_base_assessed_value)
         
