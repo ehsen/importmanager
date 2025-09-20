@@ -456,7 +456,7 @@ def calculate_import_taxes(lcv_item):
         
 
         amount_for_sales_tax = round(lcv_item.custom_base_assessed_value + custom_cd + custom_acd,0)
-        frappe.log_error(message=f"amount for sales tax is {amount_for_sales_tax}",title="sales tax amount")
+        
         custom_ast = round(tax_dict.get('AST',0)/100 * amount_for_sales_tax,0)
         custom_stamnt = round(tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax,0)
         frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_ast', custom_ast)
@@ -466,12 +466,12 @@ def calculate_import_taxes(lcv_item):
         lcv_item.stamnt = custom_stamnt
 
 
-        amount_for_it = round(amount_for_sales_tax + lcv_item.custom_ast + lcv_item.custom_stamnt,0) + lcv_item.custom_fixed_surcharge_ait
+        amount_for_it = round(amount_for_sales_tax + custom_ast + custom_stamnt,0) + lcv_item.custom_fixed_surcharge_ait
         custom_it = round(tax_dict.get('IT',0)/100 * amount_for_it,0)
         frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_it', custom_it)
         lcv_item.custom_it = custom_it
         
-        custom_total_duties_and_taxes = lcv_item.custom_cd+lcv_item.custom_acd+lcv_item.custom_stamnt + lcv_item.custom_ast+lcv_item.custom_it
+        custom_total_duties_and_taxes = custom_cd+custom_acd+custom_stamnt + custom_ast+custom_it
         frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_total_duties_and_taxes', custom_total_duties_and_taxes)
         lcv_item.custom_total_duties_and_taxes = custom_total_duties_and_taxes
 
