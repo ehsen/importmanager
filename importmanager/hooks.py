@@ -26,7 +26,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/importmanager/css/importmanager.css"
-# app_include_js = "/assets/importmanager/js/importmanager.js"
+app_include_js = "/assets/importmanager/js/importdoc_filter.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/importmanager/css/importmanager.css"
@@ -83,48 +83,28 @@ fixtures = [
     {
         "doctype": "Custom Field",
         "filters": [
-            ["dt", "=", "Item Tax Template"],
-            ["fieldname", "=", "custom_country_of_origin"]
-        ]
-    },
-    {
-        "doctype": "Custom Field",
-        "filters": [
-            ["dt", "=", "Landed Cost Voucher"],
-            ["fieldname", "=", "custom_country_of_origin"]
-        ]
-    },
-     {
-        "doctype": "Custom Field",
-        "filters": [
-            ["dt", "=", "Item Tax Template"],
-            ["fieldname", "=", "custom_apply_on_import_lcv"]
+        
+            ["module", "=", "Importmanager"]
         ]
     },
     {
         "doctype": "Property Setter",
         "filters": [
-            ["doc_type", "=", "Purchase Order Item"],
-            ["field_name", "=", "rate"],
-            ["property", "=", "precision"]
+            
+            ["module", "=", "Importmanager"]
         ]
     },
     {
-        "doctype": "Property Setter",
+        "doctype": "Workflow",
         "filters": [
-            ["doc_type", "=", "Purchase Order Item"],
-            ["field_name", "=", "amount"],
-            ["property", "=", "precision"]
+        
+            ["name", "=", "Import WorkFlow"]
         ]
     },
-       {
-        "doctype": "Property Setter",
-        "filters": [
-            ["doc_type", "=", "Purchase Invoice Item"],
-            ["field_name", "=", "amount"],
-            ["property", "=", "precision"]
-        ]
+    {
+        "doctype": "Workflow State"
     },
+     
 
 ]
 
