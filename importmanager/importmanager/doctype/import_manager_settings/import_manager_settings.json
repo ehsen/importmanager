@@ -6,7 +6,9 @@
  "field_order": [
   "imported_stock_valuation_tab",
   "imported_stock_valuation_basis",
-  "item_qty_source_for_assessment"
+  "item_qty_source_for_assessment",
+  "accounts_tab",
+  "lc_margin_account"
  ],
  "fields": [
   {
@@ -28,12 +30,24 @@
    "label": "Item Qty Source For Assessment",
    "options": "Purchase Invoice\nNo Of Units From LCV",
    "reqd": 1
+  },
+  {
+   "fieldname": "accounts_tab",
+   "fieldtype": "Tab Break",
+   "label": "Accounts"
+  },
+  {
+   "fieldname": "lc_margin_account",
+   "fieldtype": "Link",
+   "label": "LC Margin Account",
+   "options": "Account",
+   "reqd": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-09-22 16:26:26.851210",
+ "modified": "2025-09-23 14:22:03.133934",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "Import Manager Settings",
