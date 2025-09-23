@@ -415,6 +415,11 @@ def get_taxes_by_category(tax_template_name):
 def get_fixed_tax_amount_by_category(tax_dict,tax_category,lcv_item):
     fixed_taxes = tax_dict.get('fixed_taxes',{})
     fixed_tax_dict = fixed_taxes.get(tax_category,{})
+    
+    # Ensure fixed_tax_dict is a dictionary, not an integer
+    if not isinstance(fixed_tax_dict, dict):
+        return 0
+    
     fixed_tax_amount = fixed_tax_dict.get('custom_fixed_tax_amount')
     if fixed_tax_amount <= 0:
         return 0
