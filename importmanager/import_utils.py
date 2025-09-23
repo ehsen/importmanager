@@ -421,7 +421,8 @@ def get_fixed_tax_amount_by_category(tax_dict,tax_category,lcv_item):
         return 0
     
     fixed_tax_amount = fixed_tax_dict.get('custom_fixed_tax_amount')
-    if fixed_tax_amount <= 0:
+    # Check if fixed_tax_amount is None or <= 0
+    if fixed_tax_amount is None or fixed_tax_amount <= 0:
         return 0
     
     fixed_tax_basis = fixed_tax_dict.get('custom_fixed_tax_basis',0)
