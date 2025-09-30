@@ -190,6 +190,10 @@ doc_events = {
     "Landed Cost Voucher": {
         "on_submit": "importmanager.import_utils.on_submit_landed_cost_voucher",
         "on_cancel": "importmanager.import_utils.on_cancel_landed_cost_voucher"
+    },
+    "Cash Payment Voucher": {
+        "on_submit": "importmanager.import_utils.on_submit_cash_payment_voucher",
+        "on_cancel": "importmanager.import_utils.on_cancel_cash_payment_voucher"
     }
 }
 
