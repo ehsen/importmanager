@@ -699,6 +699,46 @@ def update_unallocated_misc_charges_jv(import_doc_name):
     #frappe.msgprint(f"Misc import charges updated for ImportDoc {import_doc_name}.")
 
 
+def update_cash_payment_vouchers(import_doc_name):
+    """
+    Update the ImportDoc's misc import charges based on related Cash Payment Vouchers.
+
+    :param import_doc_name: Name of the ImportDoc to update.
+    """
+    import_doc = frappe.get_doc("ImportDoc", import_doc_name)
+    
+    # Fetch submitted Cash Payment Vouchers related to the ImportDoc
+    cash_payment_vouchers = frappe.get_list(
+        "Cash Payment Voucher",
+        filters={"import_document": import_doc_name, "docstatus": 1},
+        fields=["name"],
+        ignore_permissions=True
+    )
+    
+    if not cash_payment_vouchers:
+        return
+
+    # Process each Cash Payment Voucher and update misc import charges
+    for cpv in cash_payment_vouchers:
+        cpv_doc = frappe.get_doc("Cash Payment Voucher", cpv["name"], ignore_permissions=True)
+        
+        # Prepare misc charges entry
+        misc_charge = {
+            "import_charge_type": cpv_doc.import_charge_type,
+            "amount": cpv_doc.total_payment,
+            "document_type": "Cash Payment Voucher",
+            "document_name": cpv_doc.name
+        }
+        
+        # Include paid_to information if available
+        if cpv_doc.paid_to:
+            misc_charge["paid_to"] = cpv_doc.paid_to
+
+        # Append the charge to ImportDoc
+        import_doc.append("linked_misc_import_charges", misc_charge)
+
+    # Save the updated ImportDoc
+    import_doc.save()
 
 
 def bulk_update_import_charges(import_doc_name):
@@ -903,6 +943,8 @@ def update_data_in_import_doc(import_doc_name):
             update_misc_import_charges(import_doc_name)
         print("Updated Misc Import Charges")
         update_unallocated_misc_charges_jv(import_doc_name)
+        update_cash_payment_vouchers(import_doc_name)
+        print("Updated Cash Payment Vouchers")
         calculate_total_import_charges(import_doc_name)
         print("Updated Total Import Charges")
         if doc.linked_purchase_invoices:
@@ -1002,6 +1044,18 @@ def on_cancel_landed_cost_voucher(doc, method):
     if doc.custom_import_document:
         frappe.db.after_commit.add(
             lambda: update_data_in_import_doc(doc.custom_import_document)
+        )
+
+def on_submit_cash_payment_voucher(doc, method):
+    if doc.import_document:
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.import_document)
+        )
+
+def on_cancel_cash_payment_voucher(doc, method):
+    if doc.import_document:
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.import_document)
         )
 
 
