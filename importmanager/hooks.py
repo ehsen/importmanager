@@ -104,6 +104,12 @@ fixtures = [
     {
         "doctype": "Workflow State"
     },
+    {
+        "doctype": "Print Format",
+        "filters": [
+            ["module", "=", "Importmanager"]
+        ]
+    }
      
 
 ]
@@ -112,7 +118,7 @@ fixtures = [
 # ------------
 
 # before_install = "importmanager.install.before_install"
-# after_install = "importmanager.install.after_install"
+after_install = "importmanager.app_install_hooks.create_party_types"
 
 # Uninstallation
 # ------------
