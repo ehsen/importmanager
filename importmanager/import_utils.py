@@ -333,14 +333,22 @@ def create_import_taxes_jv(landed_cost_voucher):
             frappe.log_error(message=f"{str(e)}",title="Error Creating Import Jvs")
             frappe.throw("Error Creating Import JVs. Please Contact Support")
 
+def get_item_qty_for_assessment(lcv_doc_item):
+    import_settings = frappe.get_single("Import Manager Settings")
+    if import_settings.item_qty_source_for_assessment == "Purchase Invoice":
+        return lcv_doc_item.qty
+    else:
+        return lcv_doc_item.custom_no_of_units
+
 def calculate_assessed_value(lcv_doc_item):
+    
     try:
         incoterm = frappe.get_doc(lcv_doc_item.receipt_document_type,lcv_doc_item.receipt_document).incoterm 
         
         if incoterm is None:
             incoterm = "Cost and Freight"
         
-        ex_assess_value = lcv_doc_item.custom_assessed_value_per_unit * lcv_doc_item.qty
+        ex_assess_value = lcv_doc_item.custom_assessed_value_per_unit * get_item_qty_for_assessment(lcv_doc_item)
         custom_cfr_value = ex_assess_value
         frappe.db.set_value("Landed Cost Item", lcv_doc_item.name, 'custom_cfr_value', custom_cfr_value)
         lcv_doc_item.custom_cfr_value = custom_cfr_value
@@ -406,9 +414,15 @@ def get_taxes_by_category(tax_template_name):
 
 def get_fixed_tax_amount_by_category(tax_dict,tax_category,lcv_item):
     fixed_taxes = tax_dict.get('fixed_taxes',{})
-    fixed_tax_dict = fixed_taxes.get(tax_category,0)
+    fixed_tax_dict = fixed_taxes.get(tax_category,{})
+    
+    # Ensure fixed_tax_dict is a dictionary, not an integer
+    if not isinstance(fixed_tax_dict, dict):
+        return 0
+    
     fixed_tax_amount = fixed_tax_dict.get('custom_fixed_tax_amount')
-    if fixed_tax_amount <= 0:
+    # Check if fixed_tax_amount is None or <= 0
+    if fixed_tax_amount is None or fixed_tax_amount <= 0:
         return 0
     
     fixed_tax_basis = fixed_tax_dict.get('custom_fixed_tax_basis',0)
@@ -429,8 +443,10 @@ def get_fixed_tax_amount(lcv_item):
 
 
 def calculate_import_taxes(lcv_item):
-    lcv_doc = frappe.get_cached_doc("Landed Cost Voucher",lcv_item.parent)
-    item = frappe.get_cached_doc("Item",lcv_item.item_code)
+    import_settings = frappe.get_single("Import Manager Settings")
+    imported_stock_valuation_basis = import_settings.imported_stock_valuation_basis
+    lcv_doc = frappe.get_doc("Landed Cost Voucher",lcv_item.parent)
+    item = frappe.get_doc("Item",lcv_item.item_code)
     tax_list = frappe.get_list("Item Tax Template",filters={'custom_customs_tariff_number':item.customs_tariff_number,
                                                             'custom_country_of_origin':lcv_doc.custom_country_of_origin},
                                fields=['name'],pluck='name')
@@ -440,50 +456,58 @@ def calculate_import_taxes(lcv_item):
         All GD taxes will be rounded off, we are forcing it from backend,
         but I think it should be avoided, will be dealt later on
         """
-        tax_dict = get_taxes_by_category(tax_list[0])
+        if lcv_doc.custom_manual_data_entry != 1:
+            tax_dict = get_taxes_by_category(tax_list[0])
+            
+            #lcv_item.custom_cd = 46512
+            #lcv_item.custom_custom_duty = 
+            custom_cd = round((tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value)+get_fixed_tax_amount_by_category(tax_dict,'CD',lcv_item),0)
+            #frappe.log_error(message=f"DEBUG taxdic.get {tax_dict.get('CD',0)/100}",title="tax dict debugging")
+            
+            frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_cd', custom_cd)
+            lcv_item.custom_cd = custom_cd
+
+            custom_acd = round(tax_dict.get('ACD',0)/100 * lcv_item.custom_base_assessed_value,0)
+            frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_acd', custom_acd)
+            lcv_item.custom_acd = custom_acd
+            
+
+            amount_for_sales_tax = round(lcv_item.custom_base_assessed_value + custom_cd + custom_acd,0)
+            
+            custom_ast = round(tax_dict.get('AST',0)/100 * amount_for_sales_tax,0)
+            custom_stamnt = round(tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax,0)
+            frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_ast', custom_ast)
+            lcv_item.custom_ast = custom_ast
+
+            frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_stamnt', custom_stamnt)
+            lcv_item.custom_stamnt = custom_stamnt
+
+
+            amount_for_it = round(amount_for_sales_tax + custom_ast + custom_stamnt,0) + lcv_item.custom_fixed_surcharge_ait
+            custom_it = round(tax_dict.get('IT',0)/100 * amount_for_it,0)
+            frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_it', custom_it)
+            lcv_item.custom_it = custom_it
         
-        #lcv_item.custom_cd = 46512
-        #lcv_item.custom_custom_duty = 
-        custom_cd = round((tax_dict.get('CD',0)/100 *lcv_item.custom_base_assessed_value)+get_fixed_tax_amount_by_category(tax_dict,'CD',lcv_item),0)
-        #frappe.log_error(message=f"DEBUG taxdic.get {tax_dict.get('CD',0)/100}",title="tax dict debugging")
-        frappe.log_error(message=f"tax dict is {tax_dict}",title="tax dict")
-        frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_cd', custom_cd)
-        lcv_item.custom_cd = custom_cd
-
-        custom_acd = round(tax_dict.get('ACD',0)/100 * lcv_item.custom_base_assessed_value,0)
-        frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_acd', custom_acd)
-        lcv_item.custom_acd = custom_acd
-        
-
-        amount_for_sales_tax = round(lcv_item.custom_base_assessed_value + custom_cd + custom_acd,0)
-        
-        custom_ast = round(tax_dict.get('AST',0)/100 * amount_for_sales_tax,0)
-        custom_stamnt = round(tax_dict.get('Sales Tax',0)/100 * amount_for_sales_tax,0)
-        frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_ast', custom_ast)
-        lcv_item.custom_ast = custom_ast
-
-        frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_stamnt', custom_stamnt)
-        lcv_item.custom_stamnt = custom_stamnt
-
-
-        amount_for_it = round(amount_for_sales_tax + custom_ast + custom_stamnt,0) + lcv_item.custom_fixed_surcharge_ait
-        custom_it = round(tax_dict.get('IT',0)/100 * amount_for_it,0)
-        frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_it', custom_it)
-        lcv_item.custom_it = custom_it
-        
-        custom_total_duties_and_taxes = custom_cd+custom_acd+custom_stamnt + custom_ast+custom_it
+        custom_total_duties_and_taxes = lcv_item.custom_cd+lcv_item.custom_acd+lcv_item.custom_stamnt + lcv_item.custom_ast+lcv_item.custom_it
         frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_total_duties_and_taxes', custom_total_duties_and_taxes)
         lcv_item.custom_total_duties_and_taxes = custom_total_duties_and_taxes
 
-
-        custom_base_assessment_difference = lcv_item.custom_base_assessed_value - lcv_item.amount
-        frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_base_assessment_difference', custom_base_assessment_difference)
-        lcv_item.custom_base_assessment_difference = custom_base_assessment_difference
+        # If imported stock valuation basis is Custom Assessed Value, then calculate base assessment difference
+        # Assessment difference is not applicable for IAS2 Inventory
+        if import_settings.imported_stock_valuation_basis == "Custom Assessed Value":
+            custom_base_assessment_difference = lcv_item.custom_base_assessed_value - lcv_item.amount
+            frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_base_assessment_difference', custom_base_assessment_difference)
+            lcv_item.custom_base_assessment_difference = custom_base_assessment_difference
+        else:
+            custom_base_assessment_difference = 0
+            frappe.db.set_value("Landed Cost Item", lcv_item.name, 'custom_base_assessment_difference', custom_base_assessment_difference)
+            lcv_item.custom_base_assessment_difference = custom_base_assessment_difference
 
         lcv_item.applicable_charges = lcv_item.custom_base_assessment_difference + lcv_item.custom_cd + lcv_item.custom_acd
         frappe.db.set_value("Landed Cost Item", lcv_item.name, 'applicable_charges', lcv_item.applicable_charges)
-        # Following asserrtion must pass if all above calculations are correct
-        assert(lcv_item.amount + lcv_item.custom_base_assessment_difference == lcv_item.custom_base_assessed_value)
+        # Following assertion not required for IAS2 Inventory
+        if imported_stock_valuation_basis == "Custom Assessed Value":
+            assert(lcv_item.amount + lcv_item.custom_base_assessment_difference == lcv_item.custom_base_assessed_value)
         
         
 

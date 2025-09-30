@@ -7,6 +7,8 @@
  "field_order": [
   "general_tab",
   "import_document",
+  "status",
+  "disabled",
   "lc_no",
   "issuing_date",
   "expiry_date",
@@ -30,7 +32,11 @@
   "exchange_rate",
   "base_lc_amount",
   "lc_settlement",
-  "amended_from"
+  "amended_from",
+  "section_break_07uz",
+  "lc_margin_tab",
+  "margin_amount",
+  "payment_bank_account"
  ],
  "fields": [
   {
@@ -195,6 +201,39 @@
    "fieldtype": "Currency",
    "label": "Base LC Amount",
    "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nActive\nPartially Settled (optional)\nFully Settled / Closed\nCancelled"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "section_break_07uz",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "lc_margin_tab",
+   "fieldtype": "Tab Break",
+   "label": "LC Margin"
+  },
+  {
+   "default": "0",
+   "fieldname": "margin_amount",
+   "fieldtype": "Currency",
+   "label": "Margin Amount"
+  },
+  {
+   "fieldname": "payment_bank_account",
+   "fieldtype": "Link",
+   "label": "Payment Bank Account",
+   "options": "Account"
   }
  ],
  "index_web_pages_for_search": 1,
@@ -205,7 +244,7 @@
    "link_fieldname": "letter_of_credit_to_settle"
   }
  ],
- "modified": "2024-12-20 17:02:52.146109",
+ "modified": "2025-09-23 14:56:22.335372",
  "modified_by": "Administrator",
  "module": "Importmanager",
  "name": "Letter Of Credit",
@@ -223,6 +262,18 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
    "share": 1,
    "submit": 1,
    "write": 1
