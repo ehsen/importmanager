@@ -194,6 +194,18 @@ doc_events = {
     "Cash Payment Voucher": {
         "on_submit": "importmanager.import_utils.on_submit_cash_payment_voucher",
         "on_cancel": "importmanager.import_utils.on_cancel_cash_payment_voucher"
+    },
+    "Bank Payment Voucher": {
+        "on_submit": "importmanager.import_utils.on_submit_bank_payment_voucher",
+        "on_cancel": "importmanager.import_utils.on_cancel_bank_payment_voucher"
+    },
+    "Cash Receipt Voucher": {
+        "on_submit": "importmanager.import_utils.on_submit_cash_receipt_voucher",
+        "on_cancel": "importmanager.import_utils.on_cancel_cash_receipt_voucher"
+    },
+    "Bank Receipt Voucher": {
+        "on_submit": "importmanager.import_utils.on_submit_bank_receipt_voucher",
+        "on_cancel": "importmanager.import_utils.on_cancel_bank_receipt_voucher"
     }
 }
 

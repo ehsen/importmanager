@@ -712,7 +712,8 @@ def update_cash_payment_vouchers(import_doc_name):
         "Cash Payment Voucher",
         filters={"import_document": import_doc_name, "docstatus": 1},
         fields=["name"],
-        ignore_permissions=True
+        ignore_permissions=True,
+        docstatus=1
     )
     
     if not cash_payment_vouchers:
@@ -733,6 +734,136 @@ def update_cash_payment_vouchers(import_doc_name):
         # Include paid_to information if available
         if cpv_doc.paid_to:
             misc_charge["paid_to"] = cpv_doc.paid_to
+
+        # Append the charge to ImportDoc
+        import_doc.append("linked_misc_import_charges", misc_charge)
+
+    # Save the updated ImportDoc
+    import_doc.save()
+
+
+def update_bank_payment_vouchers(import_doc_name):
+    """
+    Update the ImportDoc's misc import charges based on related Bank Payment Vouchers.
+
+    :param import_doc_name: Name of the ImportDoc to update.
+    """
+    import_doc = frappe.get_doc("ImportDoc", import_doc_name)
+    
+    # Fetch submitted Bank Payment Vouchers related to the ImportDoc
+    bank_payment_vouchers = frappe.get_list(
+        "Bank Payment Voucher",
+        filters={"import_document": import_doc_name, "docstatus": 1},
+        fields=["name"],
+        ignore_permissions=True,
+        
+    )
+    if not bank_payment_vouchers:
+        return
+
+    # Process each Bank Payment Voucher and update misc import charges
+    for bpv in bank_payment_vouchers:
+        bpv_doc = frappe.get_doc("Bank Payment Voucher", bpv["name"], ignore_permissions=True)
+        
+        # Prepare misc charges entry
+        misc_charge = {
+            "import_charge_type": bpv_doc.import_charge_type,
+            "amount": bpv_doc.total_payment,
+            "document_type": "Bank Payment Voucher",
+            "document_name": bpv_doc.name
+        }
+        
+        # Include paid_to information if available
+        if bpv_doc.paid_to:
+            misc_charge["paid_to"] = bpv_doc.paid_to
+
+        # Append the charge to ImportDoc
+        import_doc.append("linked_misc_import_charges", misc_charge)
+
+    # Save the updated ImportDoc
+    import_doc.save()
+
+
+def update_cash_receipt_vouchers(import_doc_name):
+    """
+    Update the ImportDoc's misc import charges based on related Cash Receipt Vouchers.
+    For receipts, the amount is multiplied by -1 to show negative amount in ImportDoc.
+
+    :param import_doc_name: Name of the ImportDoc to update.
+    """
+    import_doc = frappe.get_doc("ImportDoc", import_doc_name)
+    
+    # Fetch submitted Cash Receipt Vouchers related to the ImportDoc
+    cash_receipt_vouchers = frappe.get_list(
+        "Cash Receipt Voucher",
+        filters={"import_document": import_doc_name, "docstatus": 1},
+        fields=["name"],
+        ignore_permissions=True,
+        docstatus=1
+    )
+    
+    if not cash_receipt_vouchers:
+        return
+
+    # Process each Cash Receipt Voucher and update misc import charges
+    for crv in cash_receipt_vouchers:
+        crv_doc = frappe.get_doc("Cash Receipt Voucher", crv["name"], ignore_permissions=True)
+        
+        # Prepare misc charges entry (negative amount for receipts)
+        misc_charge = {
+            "import_charge_type": crv_doc.import_charge_type,
+            "amount": crv_doc.total_payment * -1,  # Negative amount for receipts
+            "document_type": "Cash Receipt Voucher",
+            "document_name": crv_doc.name
+        }
+        
+        # Include paid_to information if available
+        if crv_doc.paid_to:
+            misc_charge["paid_to"] = crv_doc.paid_to
+
+        # Append the charge to ImportDoc
+        import_doc.append("linked_misc_import_charges", misc_charge)
+
+    # Save the updated ImportDoc
+    import_doc.save()
+
+
+def update_bank_receipt_vouchers(import_doc_name):
+    """
+    Update the ImportDoc's misc import charges based on related Bank Receipt Vouchers.
+    For receipts, the amount is multiplied by -1 to show negative amount in ImportDoc.
+
+    :param import_doc_name: Name of the ImportDoc to update.
+    """
+    import_doc = frappe.get_doc("ImportDoc", import_doc_name)
+    
+    # Fetch submitted Bank Receipt Vouchers related to the ImportDoc
+    bank_receipt_vouchers = frappe.get_list(
+        "Bank Receipt Voucher",
+        filters={"import_document": import_doc_name, "docstatus": 1},
+        fields=["name"],
+        ignore_permissions=True,
+        docstatus=1
+    )
+    
+    if not bank_receipt_vouchers:
+        return
+
+    # Process each Bank Receipt Voucher and update misc import charges
+    for brv in bank_receipt_vouchers:
+        brv_doc = frappe.get_doc("Bank Receipt Voucher", brv["name"], ignore_permissions=True)
+        
+        # Prepare misc charges entry (negative amount for receipts)
+        misc_charge = {
+            "import_charge_type": brv_doc.import_charge_type,
+            "amount": brv_doc.total_payment * -1,  # Negative amount for receipts
+            "document_type": "Bank Receipt Voucher",
+            "document_name": brv_doc.name
+        }
+        
+        # Include paid_to information if available
+        if brv_doc.received_from_import_vendor:
+            misc_charge["paid_to"] = brv_doc.received_from_import_vendor
 
         # Append the charge to ImportDoc
         import_doc.append("linked_misc_import_charges", misc_charge)
@@ -945,6 +1076,12 @@ def update_data_in_import_doc(import_doc_name):
         update_unallocated_misc_charges_jv(import_doc_name)
         update_cash_payment_vouchers(import_doc_name)
         print("Updated Cash Payment Vouchers")
+        update_bank_payment_vouchers(import_doc_name)
+        print("Updated Bank Payment Vouchers")
+        update_cash_receipt_vouchers(import_doc_name)
+        print("Updated Cash Receipt Vouchers")
+        update_bank_receipt_vouchers(import_doc_name)
+        print("Updated Bank Receipt Vouchers")
         calculate_total_import_charges(import_doc_name)
         print("Updated Total Import Charges")
         if doc.linked_purchase_invoices:
@@ -1053,6 +1190,42 @@ def on_submit_cash_payment_voucher(doc, method):
         )
 
 def on_cancel_cash_payment_voucher(doc, method):
+    if doc.import_document:
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.import_document)
+        )
+
+def on_submit_bank_payment_voucher(doc, method):
+    if doc.import_document:
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.import_document)
+        )
+
+def on_cancel_bank_payment_voucher(doc, method):
+    if doc.import_document:
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.import_document)
+        )
+
+def on_submit_cash_receipt_voucher(doc, method):
+    if doc.import_document:
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.import_document)
+        )
+
+def on_cancel_cash_receipt_voucher(doc, method):
+    if doc.import_document:
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.import_document)
+        )
+
+def on_submit_bank_receipt_voucher(doc, method):
+    if doc.import_document:
+        frappe.db.after_commit.add(
+            lambda: update_data_in_import_doc(doc.import_document)
+        )
+
+def on_cancel_bank_receipt_voucher(doc, method):
     if doc.import_document:
         frappe.db.after_commit.add(
             lambda: update_data_in_import_doc(doc.import_document)
