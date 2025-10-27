@@ -19,6 +19,7 @@
     "parent": "Import WorkFlow",
     "parentfield": "states",
     "parenttype": "Workflow",
+    "send_email": 0,
     "state": "Pending",
     "update_field": null,
     "update_value": null,
@@ -34,6 +35,7 @@
     "parent": "Import WorkFlow",
     "parentfield": "states",
     "parenttype": "Workflow",
+    "send_email": 0,
     "state": "Completed",
     "update_field": null,
     "update_value": null,
@@ -50,6 +52,7 @@
     "parent": "Import WorkFlow",
     "parentfield": "transitions",
     "parenttype": "Workflow",
+    "send_email_to_creator": 0,
     "state": "Pending",
     "workflow_builder_id": null
    },
@@ -62,6 +65,7 @@
     "parent": "Import WorkFlow",
     "parentfield": "transitions",
     "parenttype": "Workflow",
+    "send_email_to_creator": 0,
     "state": "Completed",
     "workflow_builder_id": null
    }
