@@ -650,6 +650,11 @@ def update_misc_import_charges(import_doc_name):
 def update_unallocated_misc_charges_jv(import_doc_name):
     """
     Update the ImportDoc's misc import charges based on related Journal Entries.
+    
+    Only accounts marked with custom_consider_for_import_costing are processed.
+    - Debit amounts are added as positive charges
+    - Credit amounts are added as negative charges
+    Throws error if no valid accounts found in JE, without saving ImportDoc.
 
     :param import_doc_name: Name of the ImportDoc to update.
     """
@@ -665,24 +670,71 @@ def update_unallocated_misc_charges_jv(import_doc_name):
     # Fetch submitted Journal Entries related to the ImportDoc
     journal_entries = frappe.get_list(
         "Journal Entry",
-        filters={"custom_import_document": import_doc_name, "docstatus": 1,'is_system_generated':0},ignore_permissions=True,
+        filters={"custom_import_document": import_doc_name, "docstatus": 1, "is_system_generated": 0},
+        ignore_permissions=True,
         fields=["name"]
     )
     
     if not journal_entries:
-        #frappe.msgprint(f"No submitted Journal Entries found for ImportDoc {import_doc_name}.")
         return
 
     # Process each Journal Entry and update misc import charges
     for je in journal_entries:
-        je_doc = frappe.get_doc("Journal Entry", je["name"],ignore_permissions=True)
+        je_doc = frappe.get_doc("Journal Entry", je["name"], ignore_permissions=True)
+        
+        # Collect valid accounts marked for import costing and invalid accounts
+        valid_accounts = []
+        invalid_accounts = []
+        
         for account in je_doc.accounts:
+            account_obj = frappe.get_doc("Account", account.account)
+            
+            # Check if account is marked for import costing
+            if account_obj.custom_consider_for_import_costing:
+                valid_accounts.append(account)
+            else:
+                invalid_accounts.append({
+                    "account": account.account,
+                    "debit": account.debit_in_account_currency,
+                    "credit": account.credit_in_account_currency
+                })
+        
+        # Validation: Throw error if no valid accounts found
+        if not valid_accounts:
+            # Build detailed log message
+            detail_msg = f"Journal Entry {je_doc.name} has no accounts marked for import costing.\n\n"
+            detail_msg += "Accounts in this Journal Entry:\n"
+            
+            for acc in invalid_accounts:
+                debit_str = f"Debit: {acc['debit']}" if acc['debit'] > 0 else ""
+                credit_str = f"Credit: {acc['credit']}" if acc['credit'] > 0 else ""
+                amount_str = f"({', '.join(filter(None, [debit_str, credit_str]))})"
+                detail_msg += f"• {acc['account']} {amount_str}\n"
+            
+            detail_msg += "\nPlease mark the relevant accounts with 'Consider For Import Costing' checkbox in Account master."
+            
+            # Log detailed error for debugging
+            frappe.log_error(message= detail_msg, title=f"Import Costing Setup Issue - {je_doc.name}")
+            
+            # Throw short, concise error message
+            frappe.msgprint(f"Journal Entry {je_doc.name}: No accounts marked for import costing. Check Account master setup.")
+        
+        # Process valid accounts
+        for account in valid_accounts:
+            amount = 0
+            
+            # Determine amount: positive for debit, negative for credit
             if account.debit_in_account_currency > 0:
+                amount = account.debit_in_account_currency  # positive
+            elif account.credit_in_account_currency > 0:
+                amount = -account.credit_in_account_currency  # negative
+            
+            # Only append if amount is non-zero
+            if amount != 0:
                 # Prepare misc charges entry
                 misc_charge = {
                     "import_charge_type": je_doc.custom_import_charge_type,
-                    #"amount": account.debit_in_account_currency - account.credit_in_account_currency,
-                    "amount":account.debit_in_account_currency,
+                    "amount": amount,
                     "document_type": "Journal Entry",
                     "document_name": je_doc.name
                 }
@@ -930,11 +982,11 @@ def allocate_import_charges(import_doc_name):
     # TODO: This function shoudl be optimzied the way it pulls the import charges from LCV. 
     
     time.sleep(3)
-    print('allocate import charges executed')
+    frappe.log_error(message='allocate import charges executed',title='Import Doc')
     import_doc = frappe.get_doc("ImportDoc",import_doc_name)
     import_taxes_data = get_customs_duty(import_doc_name)
     item_wise_total_duty = import_taxes_data['item_wise_duty']
-    print(f"Item Wise Total Duty {item_wise_total_duty}")
+    frappe.log_error(message=f"Item Wise Total Duty {item_wise_total_duty}",title='Import Doc')
     # Update Totals In Import Doc
 
     import_doc.sales_tax_on_import = import_taxes_data['total']['stamnt']+import_taxes_data['total']['ast']
@@ -942,20 +994,19 @@ def allocate_import_charges(import_doc_name):
     import_doc.total_import_value = import_doc.total_cost + import_doc.sales_tax_on_import+import_doc.sales_tax_on_services + import_doc.total_income_tax
     
     # Allocate Charges. Services Sales Tax, will distributed Proporionately to all items
-    print(f"ImportDOc Total Import Charges {import_doc.total_import_charges}")
+    frappe.log_error(message=f"ImportDOc Total Import Charges {import_doc.total_import_charges}",title='Import Doc')
     if import_doc.total_import_charges >= 0:
         total_items_amount = sum(row.amount for row in import_doc.items)
+
         for item in import_doc.items:
             item_customs_duty = 0
             item_sales_tax = 0
             lcv_item = get_landed_cost_item(import_doc_name,item.purchase_receipt_item,ignore_permissions=True)
 
-
-            
-            if item.item_code in item_wise_total_duty.keys():
-                
-                item_customs_duty += (item_wise_total_duty[item.item_code]['custom_duty']+item_wise_total_duty[item.item_code]['acd'])
-                item_sales_tax += (item_wise_total_duty[item.item_code]['stamnt']+item_wise_total_duty[item.item_code]['ast'])
+            # Apply customs duty and taxes directly from LCV item (no aggregation by item_code)
+            if lcv_item is not None:
+                item_customs_duty = lcv_item.custom_cd + lcv_item.custom_acd
+                item_sales_tax = lcv_item.custom_stamnt + lcv_item.custom_ast
             item.allocated_charges_ex_cd = (item.amount/total_items_amount * (import_doc.total_import_charges-import_doc.total_customs_duty)) or 0
             item.allocated_import_charges = item_customs_duty + item.allocated_charges_ex_cd
             
@@ -1154,9 +1205,27 @@ def on_cancel_purchase_invoice(doc, method):
 
 def on_submit_journal_entry(doc, method):
     if doc.custom_import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.custom_import_document)
-        )
+        # Option 1: Try synchronous update first
+        try:
+            update_data_in_import_doc(doc.custom_import_document, force_sync=True)
+        except Exception as e:
+            frappe.log_error(f"Sync update failed: {str(e)}", "ImportDoc Update Fallback")
+            # Option 2: Use frappe queue as more reliable alternative to after_commit
+            try:
+                frappe.enqueue(
+                    'importmanager.import_utils.update_data_in_import_doc',
+                    import_doc_name=doc.custom_import_document,
+                    force_sync=False,
+                    queue='short',
+                    timeout=300,
+                    now=False  # Allow queuing
+                )
+            except Exception as queue_e:
+                frappe.log_error(f"Queue failed, using after_commit: {str(queue_e)}", "ImportDoc Update Final Fallback")
+                # Option 3: Final fallback to after_commit
+                frappe.db.after_commit.add(
+                    lambda: update_data_in_import_doc(doc.custom_import_document)
+                )
 
 def on_cancel_journal_entry(doc, method):
     if doc.custom_import_document:
