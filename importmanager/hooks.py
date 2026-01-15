@@ -166,7 +166,7 @@ after_install = "importmanager.app_install_hooks.create_party_types"
 
 override_doctype_class = {
  	"Landed Cost Voucher": "importmanager.importmanager.overrides.custom_landed_cost_voucher.CustomLandedCostVoucher",
-     "Item Tax Template":"importmanager.importmanager.overrides.custom_item_tax_template.CustomItemTaxTemplate"
+     
 }
 
 # Document Events
@@ -175,7 +175,7 @@ override_doctype_class = {
 
 doc_events = {
 	"Sales Invoice": {
-		"on_submit": "importmanager.importmanager.controllers.charge_allocation_controller.on_submit_create_allocation_entries",
+		#"on_submit": "importmanager.importmanager.controllers.charge_allocation_controller.on_submit_create_allocation_entries",
 	},
     "Purchase Invoice": {
 		"on_update": "importmanager.import_utils.set_expense_head",
