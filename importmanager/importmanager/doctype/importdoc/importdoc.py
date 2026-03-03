@@ -8,7 +8,7 @@ from importmanager.importmanager.controllers.charge_allocation_controller import
 from erpnext.accounts.utils import get_fiscal_year
 
 class ImportDoc(Document):
-	
+	"""
 	def autoname(self):
 		if self.linked_purchase_order:
 			from datetime import datetime
@@ -36,7 +36,7 @@ class ImportDoc(Document):
 		else:
 			frappe.throw("Please select a Linked Purchase Order")
 
-	
+	""" 
 
 	def create_import_charge_allocations(self):
 		"""
