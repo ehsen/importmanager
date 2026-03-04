@@ -195,7 +195,7 @@ class CustomLandedCostVoucher(Document):
 				'expense_account': unallocated_import_charges_account,
 				'import_charge_type':'CD+Assessment Difference',
 				'description':'Custom Duty  Charged to Stock Valuation & Pakistan Customs',
-				'amount':total_custom_duty + total_assessment_diff
+				'amount':total_custom_duty + 0 #total_assessment_diff removed from calculation
 			})
 			
 
