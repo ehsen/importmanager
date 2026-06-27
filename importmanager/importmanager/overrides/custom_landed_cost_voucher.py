@@ -366,8 +366,9 @@ class CustomLandedCostVoucher(Document):
 		self.validate_applicable_charges_for_item()
 		try:
 			#create_import_taxes_jv(self.name)
-			create_consolidated_import_taxes_jv(self.name)
-			self.update_landed_cost()
+			if self.custom_landed_cost_voucher_type == 'Import':
+				create_consolidated_import_taxes_jv(self.name)
+				self.update_landed_cost()
 		except Exception:
 			frappe.db.rollback()
 			raise
