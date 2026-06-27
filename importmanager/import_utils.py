@@ -1236,7 +1236,7 @@ def on_cancel_journal_entry(doc, method):
 def on_submit_landed_cost_voucher(doc, method):
     
     
-    if doc.custom_import_document:
+    if doc.custom_import_document and doc.custom_landed_cost_voucher_type == "Import":
         
         
         # Create import taxes JVs
@@ -1248,7 +1248,7 @@ def on_submit_landed_cost_voucher(doc, method):
         )
 
 def on_cancel_landed_cost_voucher(doc, method):
-    if doc.custom_import_document:
+    if doc.custom_import_document and doc.custom_landed_cost_voucher_type == "Import":
         frappe.db.after_commit.add(
             lambda: update_data_in_import_doc(doc.custom_import_document)
         )
