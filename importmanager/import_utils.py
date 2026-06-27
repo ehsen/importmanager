@@ -1240,7 +1240,7 @@ def on_submit_landed_cost_voucher(doc, method):
         
         
         # Create import taxes JVs
-        #create_import_taxes_jv(doc.name)
+        create_import_taxes_jv(doc.name)
         
         frappe.db.after_commit.add(
             lambda: update_data_in_import_doc(doc.custom_import_document)
