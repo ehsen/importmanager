@@ -1233,26 +1233,11 @@ def on_cancel_journal_entry(doc, method):
             lambda: update_data_in_import_doc(doc.custom_import_document)
         )
 
-def on_submit_landed_cost_voucher(doc, method):
-
-    if doc.custom_import_document and doc.custom_landed_cost_voucher_type == "Import":
-
-        # Import taxes JVs are already created by CustomLandedCostVoucher.on_submit()
-        # (importmanager/overrides/custom_landed_cost_voucher.py) using the LCV's own
-        # name. Creating them again here (previously with the wrong argument -
-        # custom_import_document instead of the LCV name) either crashed or would have
-        # posted a duplicate Journal Entry, since create_journal_voucher has no
-        # idempotency guard.
-
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.custom_import_document)
-        )
-
-def on_cancel_landed_cost_voucher(doc, method):
-    if doc.custom_import_document and doc.custom_landed_cost_voucher_type == "Import":
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.custom_import_document)
-        )
+# Landed Cost Voucher on_submit/on_cancel are handled directly by
+# CustomLandedCostVoucher (importmanager/overrides/custom_landed_cost_voucher.py)
+# rather than via doc_events hooks, so that JV creation and the
+# update_data_in_import_doc scheduling live in the same place as the rest of
+# the submit/cancel flow and share its rollback-on-failure semantics.
 
 def on_submit_cash_payment_voucher(doc, method):
     if doc.import_document:

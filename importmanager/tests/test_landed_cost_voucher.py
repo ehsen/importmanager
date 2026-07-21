@@ -7,15 +7,15 @@ from importmanager.importmanager.overrides.custom_landed_cost_voucher import Cus
 from importmanager import import_utils
 
 
-def _make_import_lcv(name, total_taxes_and_charges):
+def _make_import_lcv(name, total_taxes_and_charges, custom_import_document="TEST-IMPORTDOC-0001"):
     lcv = CustomLandedCostVoucher({"doctype": "Landed Cost Voucher"})
     lcv.name = name
     lcv.custom_landed_cost_voucher_type = "Import"
+    lcv.custom_import_document = custom_import_document
     lcv.distribute_charges_based_on = "Distribute Manually"
     lcv.total_taxes_and_charges = total_taxes_and_charges
     lcv.items = []
     lcv.validate_applicable_charges_for_item = MagicMock()
-    lcv.update_landed_cost = MagicMock()
     return lcv
 
 
@@ -24,21 +24,33 @@ class TestLandedCostVoucherZeroCustomsDuty(unittest.TestCase):
     Regression test for: LCV submit fails to generate ST/IT JV when Customs
     Duty is 0%. A 0%-CD shipment has total_taxes_and_charges == 0 (nothing to
     capitalize into stock), which must not block the ST/IT JV generation path.
+
+    JV creation is also expected to run last inside on_submit's try block, so
+    that if it fails, the whole submit fails/rolls back with it rather than
+    leaving stock capitalized but taxes unposted.
     """
 
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
     @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.create_consolidated_import_taxes_jv")
-    def test_zero_total_charges_submits_and_still_creates_jv(self, mock_create_jv):
+    def test_zero_total_charges_submits_and_still_creates_jv(self, mock_create_jv, mock_after_commit):
         lcv = _make_import_lcv("TEST-LCV-ZERO-CD", total_taxes_and_charges=0)
+        call_order = []
+        lcv.update_landed_cost = MagicMock(side_effect=lambda: call_order.append("update_landed_cost"))
+        mock_create_jv.side_effect = lambda name: call_order.append("create_jv")
 
         lcv.on_submit()
 
         lcv.validate_applicable_charges_for_item.assert_not_called()
         mock_create_jv.assert_called_once_with(lcv.name)
         lcv.update_landed_cost.assert_called_once()
+        self.assertEqual(call_order, ["update_landed_cost", "create_jv"])
+        mock_after_commit.add.assert_called_once()
 
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
     @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.create_consolidated_import_taxes_jv")
-    def test_nonzero_total_charges_still_validates_distribution(self, mock_create_jv):
+    def test_nonzero_total_charges_still_validates_distribution(self, mock_create_jv, mock_after_commit):
         lcv = _make_import_lcv("TEST-LCV-NONZERO-CD", total_taxes_and_charges=15000)
+        lcv.update_landed_cost = MagicMock()
 
         lcv.on_submit()
 
@@ -46,17 +58,62 @@ class TestLandedCostVoucherZeroCustomsDuty(unittest.TestCase):
         mock_create_jv.assert_called_once_with(lcv.name)
         lcv.update_landed_cost.assert_called_once()
 
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.create_consolidated_import_taxes_jv")
+    def test_jv_failure_rolls_back_and_fails_the_whole_submit(self, mock_create_jv, mock_after_commit):
+        lcv = _make_import_lcv("TEST-LCV-JV-FAILS", total_taxes_and_charges=0)
+        lcv.update_landed_cost = MagicMock()
+        mock_create_jv.side_effect = frappe.ValidationError("boom")
+
+        with patch(
+            "importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.rollback"
+        ) as mock_rollback:
+            with self.assertRaises(frappe.ValidationError):
+                lcv.on_submit()
+            mock_rollback.assert_called_once()
+
+        # Nothing should be scheduled for after the (rolled-back) commit.
+        mock_after_commit.add.assert_not_called()
+
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.create_consolidated_import_taxes_jv")
+    def test_no_import_document_skips_after_commit_scheduling(self, mock_create_jv, mock_after_commit):
+        lcv = _make_import_lcv("TEST-LCV-NO-IMPORTDOC", total_taxes_and_charges=0, custom_import_document=None)
+        lcv.update_landed_cost = MagicMock()
+
+        lcv.on_submit()
+
+        mock_after_commit.add.assert_not_called()
+
+
+class TestLandedCostVoucherOnCancel(unittest.TestCase):
+    """
+    on_cancel must also schedule update_data_in_import_doc directly (this used
+    to live in the now-removed doc_events on_cancel hook).
+    """
+
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
+    def test_on_cancel_schedules_import_doc_update(self, mock_after_commit):
+        lcv = _make_import_lcv("TEST-LCV-CANCEL", total_taxes_and_charges=0)
+        lcv.update_landed_cost = MagicMock()
+        lcv.cancel_all_linked_jvs = MagicMock()
+
+        lcv.on_cancel()
+
+        lcv.update_landed_cost.assert_called_once()
+        lcv.cancel_all_linked_jvs.assert_called_once()
+        mock_after_commit.add.assert_called_once()
+
 
 class TestConsolidatedImportTaxesJv(unittest.TestCase):
     """
-    Regression test for the per-item ST/IT consolidation math and the JV
-    hook wiring. Uses the reproduction figures from the bug report (0% CD
-    shipment, four items) and mocks all DB/document access so no fixtures
-    (Company/Item/PI) are required.
+    Regression test for the per-item ST/IT consolidation math. Uses the
+    reproduction figures from the bug report (0% CD shipment, four items) and
+    mocks all DB/document access so no fixtures (Company/Item/PI) are needed.
     """
 
     def _lcv_item(self, stamnt, it):
-        item = frappe._dict(
+        return frappe._dict(
             custom_base_assessment_difference=0,
             custom_stamnt=stamnt,
             custom_ast=0,
@@ -65,7 +122,6 @@ class TestConsolidatedImportTaxesJv(unittest.TestCase):
             custom_acd=0,
             custom_cess_amount=0,
         )
-        return item
 
     @patch("importmanager.import_utils.frappe.log_error")
     @patch("importmanager.import_utils.create_journal_voucher")
@@ -130,27 +186,23 @@ class TestConsolidatedImportTaxesJv(unittest.TestCase):
         self.assertEqual(total_st + total_it, 6242876)
 
 
-class TestOnSubmitLandedCostVoucherHook(unittest.TestCase):
+class TestLandedCostVoucherHooksRegistration(unittest.TestCase):
     """
-    Regression test to guard against re-introducing a duplicate/mis-argumented
-    call to create_consolidated_import_taxes_jv from the doc_events on_submit
-    hook - the LCV controller's own on_submit already creates the JV using the
-    LCV's name, so the hook must not create a second one.
+    Guard against re-introducing a doc_events hook for Landed Cost Voucher.
+    JV creation and the import-doc refresh now live entirely inside
+    CustomLandedCostVoucher.on_submit()/on_cancel() so they share its
+    rollback-on-failure semantics; a doc_events hook would run as a second,
+    disconnected step and risks duplicating (or losing) that behaviour.
     """
 
-    @patch("importmanager.import_utils.create_consolidated_import_taxes_jv")
-    @patch("importmanager.import_utils.frappe.db.after_commit")
-    def test_hook_does_not_create_a_second_jv(self, mock_after_commit, mock_create_jv):
-        doc = frappe._dict(
-            name="TEST-LCV-0001",
-            custom_import_document="TEST-IMPORTDOC-0001",
-            custom_landed_cost_voucher_type="Import",
-        )
+    def test_no_doc_events_hook_registered_for_landed_cost_voucher(self):
+        from importmanager import hooks
 
-        import_utils.on_submit_landed_cost_voucher(doc, "on_submit")
+        self.assertNotIn("Landed Cost Voucher", hooks.doc_events)
 
-        mock_create_jv.assert_not_called()
-        mock_after_commit.add.assert_called_once()
+    def test_legacy_hook_functions_removed(self):
+        self.assertFalse(hasattr(import_utils, "on_submit_landed_cost_voucher"))
+        self.assertFalse(hasattr(import_utils, "on_cancel_landed_cost_voucher"))
 
 
 if __name__ == "__main__":
