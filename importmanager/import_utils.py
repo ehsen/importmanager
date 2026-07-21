@@ -1148,6 +1148,28 @@ def update_data_in_import_doc(import_doc_name):
     print("Import Doc updated")
 
 
+def enqueue_import_doc_refresh(import_doc_name):
+    """
+    Schedule update_data_in_import_doc to run in a background worker after the
+    current transaction commits.
+
+    Never run it synchronously in the request (e.g. via a bare
+    frappe.db.after_commit callback): it is heavy, and right after an LCV/PI
+    commit a Repost Item Valuation worker holds row locks on the same PI/GL
+    rows, so a synchronous run stalls the request on lock waits for minutes
+    and then fails. A worker can simply wait the repost out.
+    """
+    frappe.enqueue(
+        update_data_in_import_doc,
+        import_doc_name=import_doc_name,
+        queue="long",
+        timeout=1800,
+        enqueue_after_commit=True,
+        job_id=f"importdoc_refresh::{import_doc_name}",
+        deduplicate=True,
+    )
+
+
 def generate_outstanding_payments_report():
     # Fetch all ImportDoc documents where status is not "Locked"
     import_docs = frappe.get_list("ImportDoc", filters={"status": ["!=", "Locked"]}, fields=["name"])
@@ -1193,45 +1215,23 @@ def generate_outstanding_payments_report():
 
 def on_submit_purchase_invoice(doc, method):
     if doc.custom_import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.custom_import_document)
-        )
+        enqueue_import_doc_refresh(doc.custom_import_document)
 
 def on_cancel_purchase_invoice(doc, method):
     if doc.custom_import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.custom_import_document)
-        )
+        enqueue_import_doc_refresh(doc.custom_import_document)
 
 def on_submit_journal_entry(doc, method):
-    if doc.custom_import_document:
-        # Option 1: Try synchronous update first
-        try:
-            update_data_in_import_doc(doc.custom_import_document, force_sync=True)
-        except Exception as e:
-            frappe.log_error(f"Sync update failed: {str(e)}", "ImportDoc Update Fallback")
-            # Option 2: Use frappe queue as more reliable alternative to after_commit
-            try:
-                frappe.enqueue(
-                    'importmanager.import_utils.update_data_in_import_doc',
-                    import_doc_name=doc.custom_import_document,
-                    force_sync=False,
-                    queue='short',
-                    timeout=300,
-                    now=False  # Allow queuing
-                )
-            except Exception as queue_e:
-                frappe.log_error(f"Queue failed, using after_commit: {str(queue_e)}", "ImportDoc Update Final Fallback")
-                # Option 3: Final fallback to after_commit
-                frappe.db.after_commit.add(
-                    lambda: update_data_in_import_doc(doc.custom_import_document)
-                )
+    # System-generated JVs come from import flows (LCV submit, the refresh job
+    # itself) that already schedule a refresh. Reacting to them here would both
+    # duplicate work and let the refresh job re-trigger itself endlessly, since
+    # it cancels and recreates JVs.
+    if doc.custom_import_document and not doc.is_system_generated:
+        enqueue_import_doc_refresh(doc.custom_import_document)
 
 def on_cancel_journal_entry(doc, method):
-    if doc.custom_import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.custom_import_document)
-        )
+    if doc.custom_import_document and not doc.is_system_generated:
+        enqueue_import_doc_refresh(doc.custom_import_document)
 
 # Landed Cost Voucher on_submit/on_cancel are handled directly by
 # CustomLandedCostVoucher (importmanager/overrides/custom_landed_cost_voucher.py)
@@ -1241,51 +1241,35 @@ def on_cancel_journal_entry(doc, method):
 
 def on_submit_cash_payment_voucher(doc, method):
     if doc.import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.import_document)
-        )
+        enqueue_import_doc_refresh(doc.import_document)
 
 def on_cancel_cash_payment_voucher(doc, method):
     if doc.import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.import_document)
-        )
+        enqueue_import_doc_refresh(doc.import_document)
 
 def on_submit_bank_payment_voucher(doc, method):
     if doc.import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.import_document)
-        )
+        enqueue_import_doc_refresh(doc.import_document)
 
 def on_cancel_bank_payment_voucher(doc, method):
     if doc.import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.import_document)
-        )
+        enqueue_import_doc_refresh(doc.import_document)
 
 def on_submit_cash_receipt_voucher(doc, method):
     if doc.import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.import_document)
-        )
+        enqueue_import_doc_refresh(doc.import_document)
 
 def on_cancel_cash_receipt_voucher(doc, method):
     if doc.import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.import_document)
-        )
+        enqueue_import_doc_refresh(doc.import_document)
 
 def on_submit_bank_receipt_voucher(doc, method):
     if doc.import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.import_document)
-        )
+        enqueue_import_doc_refresh(doc.import_document)
 
 def on_cancel_bank_receipt_voucher(doc, method):
     if doc.import_document:
-        frappe.db.after_commit.add(
-            lambda: update_data_in_import_doc(doc.import_document)
-        )
+        enqueue_import_doc_refresh(doc.import_document)
 
 
 

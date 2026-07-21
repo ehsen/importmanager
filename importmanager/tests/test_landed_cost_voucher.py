@@ -30,9 +30,9 @@ class TestLandedCostVoucherZeroCustomsDuty(unittest.TestCase):
     leaving stock capitalized but taxes unposted.
     """
 
-    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.enqueue_import_doc_refresh")
     @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.create_consolidated_import_taxes_jv")
-    def test_zero_total_charges_submits_and_still_creates_jv(self, mock_create_jv, mock_after_commit):
+    def test_zero_total_charges_submits_and_still_creates_jv(self, mock_create_jv, mock_enqueue_refresh):
         lcv = _make_import_lcv("TEST-LCV-ZERO-CD", total_taxes_and_charges=0)
         call_order = []
         lcv.update_landed_cost = MagicMock(side_effect=lambda: call_order.append("update_landed_cost"))
@@ -44,11 +44,11 @@ class TestLandedCostVoucherZeroCustomsDuty(unittest.TestCase):
         mock_create_jv.assert_called_once_with(lcv.name)
         lcv.update_landed_cost.assert_called_once()
         self.assertEqual(call_order, ["update_landed_cost", "create_jv"])
-        mock_after_commit.add.assert_called_once()
+        mock_enqueue_refresh.assert_called_once_with(lcv.custom_import_document)
 
-    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.enqueue_import_doc_refresh")
     @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.create_consolidated_import_taxes_jv")
-    def test_nonzero_total_charges_still_validates_distribution(self, mock_create_jv, mock_after_commit):
+    def test_nonzero_total_charges_still_validates_distribution(self, mock_create_jv, mock_enqueue_refresh):
         lcv = _make_import_lcv("TEST-LCV-NONZERO-CD", total_taxes_and_charges=15000)
         lcv.update_landed_cost = MagicMock()
 
@@ -58,9 +58,9 @@ class TestLandedCostVoucherZeroCustomsDuty(unittest.TestCase):
         mock_create_jv.assert_called_once_with(lcv.name)
         lcv.update_landed_cost.assert_called_once()
 
-    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.enqueue_import_doc_refresh")
     @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.create_consolidated_import_taxes_jv")
-    def test_jv_failure_rolls_back_and_fails_the_whole_submit(self, mock_create_jv, mock_after_commit):
+    def test_jv_failure_rolls_back_and_fails_the_whole_submit(self, mock_create_jv, mock_enqueue_refresh):
         lcv = _make_import_lcv("TEST-LCV-JV-FAILS", total_taxes_and_charges=0)
         lcv.update_landed_cost = MagicMock()
         mock_create_jv.side_effect = frappe.ValidationError("boom")
@@ -72,28 +72,28 @@ class TestLandedCostVoucherZeroCustomsDuty(unittest.TestCase):
                 lcv.on_submit()
             mock_rollback.assert_called_once()
 
-        # Nothing should be scheduled for after the (rolled-back) commit.
-        mock_after_commit.add.assert_not_called()
+        # No refresh should be scheduled for a failed submit.
+        mock_enqueue_refresh.assert_not_called()
 
-    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.enqueue_import_doc_refresh")
     @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.create_consolidated_import_taxes_jv")
-    def test_no_import_document_skips_after_commit_scheduling(self, mock_create_jv, mock_after_commit):
+    def test_no_import_document_skips_refresh_scheduling(self, mock_create_jv, mock_enqueue_refresh):
         lcv = _make_import_lcv("TEST-LCV-NO-IMPORTDOC", total_taxes_and_charges=0, custom_import_document=None)
         lcv.update_landed_cost = MagicMock()
 
         lcv.on_submit()
 
-        mock_after_commit.add.assert_not_called()
+        mock_enqueue_refresh.assert_not_called()
 
 
 class TestLandedCostVoucherOnCancel(unittest.TestCase):
     """
-    on_cancel must also schedule update_data_in_import_doc directly (this used
-    to live in the now-removed doc_events on_cancel hook).
+    on_cancel must also schedule the ImportDoc refresh directly (this used to
+    live in the now-removed doc_events on_cancel hook).
     """
 
-    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.db.after_commit")
-    def test_on_cancel_schedules_import_doc_update(self, mock_after_commit):
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.enqueue_import_doc_refresh")
+    def test_on_cancel_schedules_import_doc_refresh(self, mock_enqueue_refresh):
         lcv = _make_import_lcv("TEST-LCV-CANCEL", total_taxes_and_charges=0)
         lcv.update_landed_cost = MagicMock()
         lcv.cancel_all_linked_jvs = MagicMock()
@@ -102,7 +102,54 @@ class TestLandedCostVoucherOnCancel(unittest.TestCase):
 
         lcv.update_landed_cost.assert_called_once()
         lcv.cancel_all_linked_jvs.assert_called_once()
-        mock_after_commit.add.assert_called_once()
+        mock_enqueue_refresh.assert_called_once_with(lcv.custom_import_document)
+
+
+class TestImportDocRefreshScheduling(unittest.TestCase):
+    """
+    The ImportDoc refresh must run as a background job enqueued after commit —
+    never synchronously in the request (a bare after_commit callback stalls
+    the request for minutes on lock waits against the Repost Item Valuation
+    worker, then fails). System-generated JVs must not trigger it: their
+    parent flows already schedule a refresh, and the refresh job itself
+    cancels/recreates JVs, so reacting to them would loop forever.
+    """
+
+    @patch("importmanager.import_utils.frappe.enqueue")
+    def test_refresh_is_enqueued_as_deduplicated_background_job_after_commit(self, mock_enqueue):
+        import_utils.enqueue_import_doc_refresh("TEST-IMPORTDOC-0001")
+
+        mock_enqueue.assert_called_once()
+        kwargs = mock_enqueue.call_args.kwargs
+        self.assertTrue(kwargs["enqueue_after_commit"])
+        self.assertTrue(kwargs["deduplicate"])
+        self.assertEqual(kwargs["job_id"], "importdoc_refresh::TEST-IMPORTDOC-0001")
+        self.assertEqual(kwargs["import_doc_name"], "TEST-IMPORTDOC-0001")
+
+    @patch("importmanager.import_utils.enqueue_import_doc_refresh")
+    def test_system_generated_jv_does_not_trigger_refresh(self, mock_enqueue_refresh):
+        doc = frappe._dict(
+            name="TEST-JV-SYSTEM",
+            custom_import_document="TEST-IMPORTDOC-0001",
+            is_system_generated=1,
+        )
+
+        import_utils.on_submit_journal_entry(doc, "on_submit")
+        import_utils.on_cancel_journal_entry(doc, "on_cancel")
+
+        mock_enqueue_refresh.assert_not_called()
+
+    @patch("importmanager.import_utils.enqueue_import_doc_refresh")
+    def test_manual_jv_triggers_refresh(self, mock_enqueue_refresh):
+        doc = frappe._dict(
+            name="TEST-JV-MANUAL",
+            custom_import_document="TEST-IMPORTDOC-0001",
+            is_system_generated=0,
+        )
+
+        import_utils.on_submit_journal_entry(doc, "on_submit")
+
+        mock_enqueue_refresh.assert_called_once_with("TEST-IMPORTDOC-0001")
 
 
 class TestConsolidatedImportTaxesJv(unittest.TestCase):

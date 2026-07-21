@@ -7,7 +7,7 @@ from frappe import _
 from frappe.model.meta import get_field_precision
 from frappe.query_builder.custom import ConstantColumn
 from frappe.utils import flt,datetime
-from importmanager.import_utils import calculate_import_assessment,create_import_taxes_jv,create_consolidated_import_taxes_jv,update_data_in_import_doc
+from importmanager.import_utils import calculate_import_assessment,create_import_taxes_jv,create_consolidated_import_taxes_jv,enqueue_import_doc_refresh
 
 import erpnext
 from erpnext.controllers.taxes_and_totals import init_landed_taxes_and_totals
@@ -217,9 +217,7 @@ class CustomLandedCostVoucher(LandedCostVoucher):
 				frappe.db.rollback()
 				raise
 			if self.custom_import_document:
-				frappe.db.after_commit.add(
-					lambda: update_data_in_import_doc(self.custom_import_document)
-				)
+				enqueue_import_doc_refresh(self.custom_import_document)
 		else:
 			super().on_submit()
 
@@ -233,9 +231,7 @@ class CustomLandedCostVoucher(LandedCostVoucher):
 			self.update_landed_cost()
 			self.cancel_all_linked_jvs()
 			if self.custom_import_document:
-				frappe.db.after_commit.add(
-					lambda: update_data_in_import_doc(self.custom_import_document)
-				)
+				enqueue_import_doc_refresh(self.custom_import_document)
 		else:
 			super().on_cancel()
 
