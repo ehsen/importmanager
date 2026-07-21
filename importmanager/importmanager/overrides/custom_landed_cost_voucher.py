@@ -200,7 +200,13 @@ class CustomLandedCostVoucher(LandedCostVoucher):
 
 	def on_submit(self):
 		if self.custom_landed_cost_voucher_type == 'Import':
-			self.validate_applicable_charges_for_item()
+			# CD/ACD total (total_taxes_and_charges) can legitimately be zero for a
+			# 0%-CD shipment. The core "Distribute Manually" validation treats an
+			# all-zero distribution as a user error, so only run it when there is
+			# actually something to distribute/capitalize into stock. The ST/IT JV
+			# below is independent of CD/ACD and must still be generated either way.
+			if flt(self.total_taxes_and_charges):
+				self.validate_applicable_charges_for_item()
 			try:
 				create_consolidated_import_taxes_jv(self.name)
 				self.update_landed_cost()
