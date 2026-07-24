@@ -3,8 +3,18 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 
+from erpnext.stock.doctype.landed_cost_voucher.landed_cost_voucher import LandedCostVoucher
 from importmanager.importmanager.overrides.custom_landed_cost_voucher import CustomLandedCostVoucher
 from importmanager import import_utils
+
+
+class _Row(frappe._dict):
+    """Lightweight stand-in for a Landed Cost Item child row: supports the
+    same .get()/.set() interface real Document rows expose, without needing
+    a DB-backed doctype."""
+
+    def set(self, key, value):
+        self[key] = value
 
 
 def _make_import_lcv(name, total_taxes_and_charges, custom_import_document="TEST-IMPORTDOC-0001"):
@@ -250,6 +260,143 @@ class TestLandedCostVoucherHooksRegistration(unittest.TestCase):
     def test_legacy_hook_functions_removed(self):
         self.assertFalse(hasattr(import_utils, "on_submit_landed_cost_voucher"))
         self.assertFalse(hasattr(import_utils, "on_cancel_landed_cost_voucher"))
+
+
+class TestEnsurePurchaseReceiptItemLinks(unittest.TestCase):
+    """
+    Regression test for: a "Regular" (or "Import") Landed Cost Voucher submits
+    with no error, applicable_charges is computed and distributed correctly,
+    but the linked Purchase Invoice's landed_cost_voucher_amount/valuation_rate
+    never change and no GL Entry reflects the capitalized amount.
+
+    Root cause: erpnext's set_landed_cost_voucher_amount() (called from
+    update_landed_cost() on submit) only sums Landed Cost Item rows that carry
+    a purchase_receipt_item (or stock_entry_item) link back to the exact
+    source-document item row. Rows added without that link - typed in
+    manually, or built via API/script instead of clicking "Get Items from
+    Purchase Receipts" - still compute applicable_charges correctly (that math
+    only uses amount/qty), so the voucher looks fully successful, but the
+    capitalization step silently finds nothing to sum.
+
+    ensure_purchase_receipt_item_links() (wired into validate_line_items(),
+    which both the "Import" and "Regular" code paths call) backfills that link
+    by matching item_code against the receipt document's own item rows, and
+    throws instead of silently proceeding when the match isn't unique.
+    """
+
+    def setUp(self):
+        # Build the (unsaved, in-memory) doc *without* frappe.get_all patched -
+        # constructing/meta-loading a Document legitimately calls frappe.get_all
+        # for permissions/DocType Link/etc., and patching it globally for the
+        # whole test would corrupt those unrelated calls too.
+        self.lcv = CustomLandedCostVoucher({"doctype": "Landed Cost Voucher"})
+        self.lcv.custom_landed_cost_voucher_type = "Regular"
+
+    def _get_all_patch(self):
+        return patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.frappe.get_all")
+
+    def test_backfills_missing_link_on_unique_match(self):
+        self.lcv.items = [
+            _Row(
+                idx=1,
+                item_code="ITEM-A",
+                receipt_document_type="Purchase Invoice",
+                receipt_document="PI-0001",
+                purchase_receipt_item=None,
+            )
+        ]
+
+        with self._get_all_patch() as mock_get_all:
+            mock_get_all.return_value = ["pi-item-row-1"]
+            self.lcv.ensure_purchase_receipt_item_links()
+
+            mock_get_all.assert_called_once_with(
+                "Purchase Invoice Item",
+                filters={"parent": "PI-0001", "item_code": "ITEM-A"},
+                pluck="name",
+            )
+        self.assertEqual(self.lcv.items[0].purchase_receipt_item, "pi-item-row-1")
+
+    def test_leaves_already_linked_rows_untouched(self):
+        self.lcv.items = [
+            _Row(
+                idx=1,
+                item_code="ITEM-A",
+                receipt_document_type="Purchase Invoice",
+                receipt_document="PI-0001",
+                purchase_receipt_item="already-linked-row",
+            )
+        ]
+
+        with self._get_all_patch() as mock_get_all:
+            self.lcv.ensure_purchase_receipt_item_links()
+            mock_get_all.assert_not_called()
+
+        self.assertEqual(self.lcv.items[0].purchase_receipt_item, "already-linked-row")
+
+    def test_throws_when_item_not_found_in_receipt_document(self):
+        self.lcv.items = [
+            _Row(
+                idx=1,
+                item_code="NOT-ON-THE-PI",
+                receipt_document_type="Purchase Invoice",
+                receipt_document="PI-0001",
+                purchase_receipt_item=None,
+            )
+        ]
+
+        with self._get_all_patch() as mock_get_all:
+            mock_get_all.return_value = []
+            with self.assertRaises(frappe.ValidationError):
+                self.lcv.ensure_purchase_receipt_item_links()
+
+    def test_throws_when_item_code_ambiguous(self):
+        self.lcv.items = [
+            _Row(
+                idx=1,
+                item_code="ITEM-A",
+                receipt_document_type="Purchase Invoice",
+                receipt_document="PI-0001",
+                purchase_receipt_item=None,
+            )
+        ]
+
+        with self._get_all_patch() as mock_get_all:
+            mock_get_all.return_value = ["row-1", "row-2"]
+            with self.assertRaises(frappe.ValidationError):
+                self.lcv.ensure_purchase_receipt_item_links()
+
+    def test_stock_entry_rows_use_stock_entry_item_field(self):
+        self.lcv.items = [
+            _Row(
+                idx=1,
+                item_code="ITEM-A",
+                receipt_document_type="Stock Entry",
+                receipt_document="STE-0001",
+                stock_entry_item=None,
+                purchase_receipt_item=None,
+            )
+        ]
+
+        with self._get_all_patch() as mock_get_all:
+            mock_get_all.return_value = ["se-detail-row"]
+            self.lcv.ensure_purchase_receipt_item_links()
+
+            mock_get_all.assert_called_once_with(
+                "Stock Entry Detail",
+                filters={"parent": "STE-0001", "item_code": "ITEM-A"},
+                pluck="name",
+            )
+        self.assertEqual(self.lcv.items[0].stock_entry_item, "se-detail-row")
+
+    def test_validate_line_items_backfills_links_before_core_validation(self):
+        self.lcv.ensure_purchase_receipt_item_links = MagicMock()
+
+        with patch.object(LandedCostVoucher, "validate_line_items") as mock_super_validate:
+            self.lcv.validate_line_items()
+
+        self.lcv.ensure_purchase_receipt_item_links.assert_called_once()
+        mock_super_validate.assert_called_once()
 
 
 if __name__ == "__main__":

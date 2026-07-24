@@ -112,6 +112,55 @@ class CustomLandedCostVoucher(LandedCostVoucher):
 		if not self.custom_country_of_origin:
 			frappe.throw("Please Select Country Of Origin in Landed Cost Voucher")
 
+	def validate_line_items(self):
+		# core's set_landed_cost_voucher_amount() (called from update_landed_cost()
+		# on submit) sums only Landed Cost Item rows carrying a purchase_receipt_item
+		# (or stock_entry_item) link back to the exact source-document item row.
+		# Rows added without that link - e.g. typed in manually or built via API
+		# instead of the "Get Items from Purchase Receipts" button - compute
+		# applicable_charges correctly (that math only uses amount/qty) and let the
+		# voucher submit with no error, but never reach the source document's stock
+		# valuation or GL. Backfill the link here so submission always has an actual
+		# accounting effect instead of silently doing nothing.
+		self.ensure_purchase_receipt_item_links()
+		super().validate_line_items()
+
+	def ensure_purchase_receipt_item_links(self):
+		for item in self.get("items"):
+			link_field = (
+				"stock_entry_item" if item.receipt_document_type == "Stock Entry" else "purchase_receipt_item"
+			)
+			if item.get(link_field):
+				continue
+			if not (item.receipt_document_type and item.receipt_document and item.item_code):
+				continue
+
+			child_doctype = (
+				"Stock Entry Detail"
+				if item.receipt_document_type == "Stock Entry"
+				else item.receipt_document_type + " Item"
+			)
+			matches = frappe.get_all(
+				child_doctype,
+				filters={"parent": item.receipt_document, "item_code": item.item_code},
+				pluck="name",
+			)
+
+			if len(matches) == 1:
+				item.set(link_field, matches[0])
+			elif len(matches) > 1:
+				frappe.throw(
+					_(
+						"Row {0}: Item {1} appears more than once in {2} {3}. Please use 'Get Items from Purchase Receipts' to fetch items instead of adding them manually, so each row links unambiguously to its source item."
+					).format(item.idx, frappe.bold(item.item_code), item.receipt_document_type, frappe.bold(item.receipt_document))
+				)
+			else:
+				frappe.throw(
+					_(
+						"Row {0}: Item {1} was not found in {2} {3}. Please use 'Get Items from Purchase Receipts' to fetch items instead of adding them manually."
+					).format(item.idx, frappe.bold(item.item_code), item.receipt_document_type, frappe.bold(item.receipt_document))
+				)
+
 	def validate(self):
 		if self.custom_landed_cost_voucher_type == 'Import':
 			self.check_mandatory()
