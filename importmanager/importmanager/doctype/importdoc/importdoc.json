@@ -1,5 +1,6 @@
 {
  "actions": [],
+ "allow_rename": 1,
  "autoname": "naming_series:",
  "creation": "2024-11-30 10:05:03.757601",
  "doctype": "DocType",
