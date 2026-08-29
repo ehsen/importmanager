@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
+from frappe.utils import flt
 
 from erpnext.stock.doctype.landed_cost_voucher.landed_cost_voucher import LandedCostVoucher
 from importmanager.importmanager.overrides.custom_landed_cost_voucher import CustomLandedCostVoucher
@@ -509,6 +510,153 @@ class TestImportAssessmentDoesNotPartiallyCommitDocstatus(unittest.TestCase):
             "committed mid-loop, making the earlier docstatus write durable before "
             "on_submit()'s failure could roll it back.",
         )
+
+
+class TestAssessmentDifferenceTaxRowPersists(unittest.TestCase):
+    """
+    Regression test for: apply_assessment_difference_and_duty() appends a row
+    to self.taxes, but it used to run from on_update() - which fires strictly
+    *after* this save cycle's own db_insert()/db_update() (see
+    frappe/model/document.py: set_parent_in_children() + _validate() both run
+    before db_insert()/db_update(), while run_post_save_methods() - which
+    calls on_update() - runs after). So the appended row only ever existed on
+    the in-memory doc and was never written to the Landed Cost Taxes and
+    Charges child table, on any save or submit. The GL distribution
+    (get_item_account_wise_lcv_entries() in core ERPNext) re-fetches the LCV
+    fresh from the DB, found this table empty, and silently dropped the
+    credit side - "Debit and Credit not equal for Purchase Receipt".
+
+    The fix moved this computation into validate(), which runs before core's
+    db write. This test proves the row survives an actual db_update() call,
+    not just self.taxes in memory - the exact gap a mock-based test would
+    have missed.
+    """
+
+    def setUp(self):
+        self.company = frappe.db.get_value("Company", {}, "name")
+        self.orig_unallocated_account = frappe.db.get_value(
+            "Company", self.company, "custom_unallocated_import_charges_account"
+        )
+        self.orig_assessment_account = frappe.db.get_value(
+            "Company", self.company, "custom_default_import_assessment_charge_account"
+        )
+        frappe.db.set_value(
+            "Company",
+            self.company,
+            "custom_unallocated_import_charges_account",
+            "TEST-Unallocated Import Charges",
+            update_modified=False,
+        )
+        frappe.db.set_value(
+            "Company",
+            self.company,
+            "custom_default_import_assessment_charge_account",
+            "TEST-Assessment Variance",
+            update_modified=False,
+        )
+
+        self.lcv = frappe.get_doc(
+            {
+                "doctype": "Landed Cost Voucher",
+                "naming_series": "MAT-LCV-.YYYY.-",
+                "custom_landed_cost_voucher_type": "Import",
+                "distribute_charges_based_on": "Distribute Manually",
+                "company": self.company,
+                "posting_date": frappe.utils.nowdate(),
+                "docstatus": 0,
+            }
+        )
+        self.lcv.db_insert()
+
+        self.item = frappe.get_doc(
+            {
+                "doctype": "Landed Cost Item",
+                "parent": self.lcv.name,
+                "parentfield": "items",
+                "parenttype": "Landed Cost Voucher",
+                "idx": 1,
+                "item_code": "TEST-ASSESSMENT-DIFF-FAKE-ITEM",
+                "receipt_document_type": "Purchase Receipt",
+                "receipt_document": "NON-EXISTENT-PR-FOR-TEST",
+                "qty": 1,
+                "amount": 10000,
+                "custom_base_assessment_difference": 500,
+                "custom_cd": 200,
+                "custom_acd": 50,
+            }
+        )
+        self.item.db_insert()
+
+    def tearDown(self):
+        frappe.db.sql(
+            "delete from `tabLanded Cost Taxes and Charges` where parent=%s", self.lcv.name
+        )
+        frappe.db.sql("delete from `tabLanded Cost Item` where name=%s", self.item.name)
+        frappe.db.sql("delete from `tabLanded Cost Voucher` where name=%s", self.lcv.name)
+        frappe.db.set_value(
+            "Company",
+            self.company,
+            "custom_unallocated_import_charges_account",
+            self.orig_unallocated_account,
+            update_modified=False,
+        )
+        frappe.db.set_value(
+            "Company",
+            self.company,
+            "custom_default_import_assessment_charge_account",
+            self.orig_assessment_account,
+            update_modified=False,
+        )
+        frappe.db.commit()
+
+    @patch("importmanager.importmanager.overrides.custom_landed_cost_voucher.calculate_import_assessment")
+    def test_taxes_row_survives_db_update(self, mock_calculate_import_assessment):
+        # Reload fresh, like a real save cycle would: get_doc() picks up the
+        # CustomLandedCostVoucher controller override and loads the child row
+        # just written above.
+        lcv_doc = frappe.get_doc("Landed Cost Voucher", self.lcv.name)
+        self.assertEqual(len(lcv_doc.items), 1)
+
+        # Stand in for the parts that need a full real Purchase Receipt /
+        # Item Tax Template chain (already covered by the manual E2E
+        # reproduction in the bug report) - only the persistence mechanism
+        # under test needs to run for real.
+        lcv_doc.check_mandatory = MagicMock()
+        lcv_doc.validate_receipt_documents = MagicMock()
+        lcv_doc.validate_line_items = MagicMock()
+        lcv_doc.validate_country_of_rigin = MagicMock()
+
+        # This is the method under test: it must append the assessment/duty
+        # row to self.taxes *and* leave it there for the framework's own
+        # db_update() to persist, i.e. it must run as part of validate().
+        lcv_doc.validate()
+        mock_calculate_import_assessment.assert_called_once_with(lcv_doc)
+
+        self.assertEqual(len(lcv_doc.taxes), 1)
+        self.assertEqual(flt(lcv_doc.taxes[0].amount), 750)  # custom_cd + custom_acd + assessment_diff
+
+        # Simulate the same db write core Frappe performs right after
+        # validate() in a real insert()/save() cycle: db_update() writes the
+        # parent row, update_children() syncs child tables (frappe/model/
+        # document.py: _save() calls db_update() then update_children()).
+        lcv_doc.db_update()
+        lcv_doc.update_children()
+
+        db_rows = frappe.get_all(
+            "Landed Cost Taxes and Charges",
+            filters={"parent": lcv_doc.name, "parenttype": "Landed Cost Voucher"},
+            fields=["amount", "expense_account"],
+        )
+        self.assertEqual(
+            len(db_rows),
+            1,
+            "Assessment/duty taxes row was not persisted to the Landed Cost Taxes and "
+            "Charges table by db_update() - it only exists on the in-memory document. "
+            "This is the actual persistence-gap regression: computing the row is not "
+            "enough if it happens after core's own db write (on_update()).",
+        )
+        self.assertEqual(flt(db_rows[0].amount), 750)
+        self.assertEqual(db_rows[0].expense_account, "TEST-Unallocated Import Charges")
 
 
 if __name__ == "__main__":

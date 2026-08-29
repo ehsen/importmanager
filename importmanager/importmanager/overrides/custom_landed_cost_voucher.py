@@ -170,11 +170,16 @@ class CustomLandedCostVoucher(LandedCostVoucher):
 			self.set_total_taxes_and_charges()
 			if not self.get("items"):
 				self.get_items_from_purchase_receipts()
-		else:
-			super().validate()
 
-	def on_update(self):
-		if self.custom_landed_cost_voucher_type == 'Import':
+			# All of this used to run in on_update(), but on_update() executes
+			# strictly after this save cycle's db_insert()/db_update() (see
+			# Document.insert()/_save() -> run_post_save_methods()). Since this
+			# appends a row to self.taxes, doing it in on_update() meant the
+			# row only ever existed in memory and was never written to the
+			# Landed Cost Taxes and Charges child table on any save/submit.
+			# Running it here, before core's own db write, lets the appended
+			# row be persisted as part of the same insert/update.
+			#
 			# If its an import voucher, in that case all charges will be applied systematically
 			# User cant add manually anything in it, to streamline the costing & regulatory compliance
 			self.validate_country_of_rigin()
@@ -187,6 +192,10 @@ class CustomLandedCostVoucher(LandedCostVoucher):
 			self.set_total_taxes_and_charges()
 			self.set_applicable_charges_on_item()
 		else:
+			super().validate()
+
+	def on_update(self):
+		if self.custom_landed_cost_voucher_type != 'Import':
 			if hasattr(super(), 'on_update'):
 				super().on_update()
 

@@ -381,7 +381,7 @@ def calculate_import_assessment(lcv_doc):
     print(f"lcv doc items are {lcv_doc.items}")
     for item in lcv_doc.items:
         calculate_assessed_value(item)
-        calculate_import_taxes(item)
+        calculate_import_taxes(item, lcv_doc)
 
 def get_taxes_by_category(tax_template_name):
     query = """
@@ -436,10 +436,15 @@ def get_fixed_tax_amount(lcv_item):
 
 
 
-def calculate_import_taxes(lcv_item):
+def calculate_import_taxes(lcv_item, lcv_doc=None):
     import_settings = frappe.get_single("Import Manager Settings")
     imported_stock_valuation_basis = import_settings.imported_stock_valuation_basis
-    lcv_doc = frappe.get_doc("Landed Cost Voucher",lcv_item.parent)
+    # Use the in-memory parent doc when the caller has it (calculate_import_assessment
+    # runs from validate(), before the parent is written to the DB on a fresh
+    # insert - frappe.get_doc(..., lcv_item.parent) would raise DoesNotExistError
+    # in that case since the row only exists in memory at that point).
+    if lcv_doc is None:
+        lcv_doc = frappe.get_doc("Landed Cost Voucher",lcv_item.parent)
     item = frappe.get_doc("Item",lcv_item.item_code)
     tax_list = frappe.get_list("Item Tax Template",filters={'custom_customs_tariff_number':item.customs_tariff_number,
                                                             'custom_country_of_origin':lcv_doc.custom_country_of_origin},
