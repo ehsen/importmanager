@@ -1274,7 +1274,7 @@ def autoname_purchase_invoice(doc, method):
         fiscal_year_name = datetime.datetime.now().strftime('%y')
 
     # Get company abbreviation
-    company_abbr = doc.custom_abbr or ''
+    company_abbr = frappe.db.get_value("Company", doc.company, "abbr") or ''
 
     # Handle different naming based on purchase invoice type
     if doc.custom_purchase_invoice_type == "Import":
