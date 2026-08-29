@@ -218,7 +218,7 @@ class CustomLandedCostVoucher(LandedCostVoucher):
 				'expense_account': unallocated_import_charges_account,
 				'import_charge_type':'CD+Assessment Difference',
 				'description':'Custom Duty  Charged to Stock Valuation & Pakistan Customs',
-				'amount':total_custom_duty + 0
+				'amount':total_custom_duty + total_assessment_diff
 			})
 
 	def set_applicable_import_charges(self):
