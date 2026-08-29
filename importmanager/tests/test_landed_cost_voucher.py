@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
@@ -397,6 +398,117 @@ class TestEnsurePurchaseReceiptItemLinks(unittest.TestCase):
 
         self.lcv.ensure_purchase_receipt_item_links.assert_called_once()
         mock_super_validate.assert_called_once()
+
+
+class TestCalculateImportAssessmentNoMidLoopCommit(unittest.TestCase):
+    """
+    Regression test for: calculate_import_assessment() used to call
+    frappe.db.commit() between calculate_assessed_value(item) and
+    calculate_import_taxes(item) inside its per-item loop. This function
+    runs from on_update(), which fires before on_submit()'s own
+    try/except frappe.db.rollback() boundary - so that commit made
+    docstatus=1 (and item tax fields) durable ahead of time, and a genuine
+    downstream JV failure could no longer roll them back.
+    """
+
+    @patch("importmanager.import_utils.calculate_import_taxes")
+    @patch("importmanager.import_utils.calculate_assessed_value")
+    @patch("importmanager.import_utils.frappe.db.commit")
+    def test_does_not_commit_between_items(self, mock_commit, mock_assessed_value, mock_import_taxes):
+        # frappe._dict can't hold an "items" key accessed via dot notation -
+        # dict.items (the builtin method) always shadows it - so use a plain
+        # namespace instead.
+        lcv_doc = SimpleNamespace(items=[frappe._dict(name="item-1"), frappe._dict(name="item-2")])
+
+        import_utils.calculate_import_assessment(lcv_doc)
+
+        mock_commit.assert_not_called()
+        self.assertEqual(mock_assessed_value.call_count, 2)
+        self.assertEqual(mock_import_taxes.call_count, 2)
+
+
+class TestImportAssessmentDoesNotPartiallyCommitDocstatus(unittest.TestCase):
+    """
+    Integration regression test for the same defect, reproducing the actual
+    db_update() -> on_update() -> on_submit() sequence with real (initially
+    uncommitted) DB writes: Document._save() runs db_update() - which writes
+    docstatus=1 to the DB - *before* run_post_save_methods() calls
+    on_update() and then on_submit() (frappe/model/document.py). If
+    calculate_import_assessment() (called from on_update()) ever
+    re-introduces a mid-loop frappe.db.commit(), that earlier docstatus=1
+    write becomes durable right there, and on_submit()'s own
+    "except: frappe.db.rollback(); raise" (custom_landed_cost_voucher.py) can
+    no longer undo it when a downstream step (e.g. JV creation failing for a
+    missing Government Party Type / Company account) genuinely fails -
+    leaving a voucher that looks submitted with no corresponding JV.
+    """
+
+    def setUp(self):
+        self.lcv = frappe.get_doc(
+            {
+                "doctype": "Landed Cost Voucher",
+                "naming_series": "MAT-LCV-.YYYY.-",
+                "custom_landed_cost_voucher_type": "Import",
+                "distribute_charges_based_on": "Distribute Manually",
+                "docstatus": 0,
+            }
+        )
+        self.lcv.db_insert()
+
+        self.item = frappe.get_doc(
+            {
+                "doctype": "Landed Cost Item",
+                "parent": self.lcv.name,
+                "parentfield": "items",
+                "parenttype": "Landed Cost Voucher",
+                "idx": 1,
+                # Points at a document that doesn't exist: calculate_assessed_value
+                # swallows the resulting DoesNotExistError itself (broad
+                # try/except + frappe.log_error) and writes nothing, so this
+                # fixture only ever exercises the commit-boundary behaviour
+                # under test, never the real assessment math.
+                "receipt_document_type": "Purchase Receipt",
+                "receipt_document": "NON-EXISTENT-PR-FOR-TEST",
+            }
+        )
+        self.item.db_insert()
+
+    def tearDown(self):
+        # If a mid-loop commit regresses, the rows below were durably
+        # committed by the code under test and must be cleaned up for real;
+        # if not, this delete+commit is a no-op against an already-rolled-back
+        # transaction.
+        frappe.db.sql("delete from `tabLanded Cost Item` where name=%s", self.item.name)
+        frappe.db.sql("delete from `tabLanded Cost Voucher` where name=%s", self.lcv.name)
+        frappe.db.commit()
+
+    @patch("importmanager.import_utils.calculate_import_taxes")
+    def test_failed_downstream_jv_rolls_back_docstatus(self, mock_import_taxes):
+        # Simulate db_update() having just written docstatus=1 to the DB
+        # (uncommitted) as part of submit(), before on_update()/on_submit() run.
+        frappe.db.set_value("Landed Cost Voucher", self.lcv.name, "docstatus", 1, update_modified=False)
+
+        lcv_doc = frappe.get_doc("Landed Cost Voucher", self.lcv.name)
+        import_utils.calculate_import_assessment(lcv_doc)
+
+        # Simulate on_submit()'s own try/except: a genuine downstream failure
+        # (e.g. missing Government Party Type / Company account config) during
+        # create_consolidated_import_taxes_jv rolls back and re-raises.
+        with self.assertRaises(frappe.ValidationError):
+            try:
+                raise frappe.ValidationError("Simulated: missing Government Party Type")
+            except Exception:
+                frappe.db.rollback()
+                raise
+
+        persisted_docstatus = frappe.db.get_value("Landed Cost Voucher", self.lcv.name, "docstatus")
+        self.assertNotEqual(
+            persisted_docstatus,
+            1,
+            "docstatus=1 survived the rollback: calculate_import_assessment() must have "
+            "committed mid-loop, making the earlier docstatus write durable before "
+            "on_submit()'s failure could roll it back.",
+        )
 
 
 if __name__ == "__main__":

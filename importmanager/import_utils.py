@@ -380,14 +380,8 @@ def calculate_assessed_value(lcv_doc_item):
 def calculate_import_assessment(lcv_doc):
     print(f"lcv doc items are {lcv_doc.items}")
     for item in lcv_doc.items:
-        
         calculate_assessed_value(item)
-        frappe.db.commit()
-        
         calculate_import_taxes(item)
-        #lcv_doc.save()
-        #frappe.db.commit()
-    #frappe.db.commit()
 
 def get_taxes_by_category(tax_template_name):
     query = """
