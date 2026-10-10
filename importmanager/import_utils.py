@@ -7,6 +7,9 @@ import time
 from frappe.exceptions import TimestampMismatchError
 from frappe.model.naming import make_autoname
 
+# Excluded misc import charge types (not shown, not counted in calculations)
+EXCLUDED_MISC_CHARGE_TYPES = ("LC Margin", "LC Retirement", "Wire Transfer")
+
 def create_journal_voucher(title, posting_date, accounts,import_document=None):
     """
     Create a Journal Voucher (Journal Entry) in ERPNext.
@@ -773,8 +776,8 @@ def update_cash_payment_vouchers(import_doc_name):
     for cpv in cash_payment_vouchers:
         cpv_doc = frappe.get_doc("Cash Payment Voucher", cpv["name"], ignore_permissions=True)
 
-        # LC Margin is a payment against the LC, not an actual import expense
-        if cpv_doc.import_charge_type == "LC Margin":
+        # Skip excluded charge types (LC Margin, LC Retirement, Wire Transfer)
+        if cpv_doc.import_charge_type in EXCLUDED_MISC_CHARGE_TYPES:
             continue
 
         # Prepare misc charges entry
@@ -818,8 +821,8 @@ def update_bank_payment_vouchers(import_doc_name):
     for bpv in bank_payment_vouchers:
         bpv_doc = frappe.get_doc("Bank Payment Voucher", bpv["name"], ignore_permissions=True)
 
-        # LC Margin is a payment against the LC, not an actual import expense
-        if bpv_doc.import_charge_type == "LC Margin":
+        # Skip excluded charge types (LC Margin, LC Retirement, Wire Transfer)
+        if bpv_doc.import_charge_type in EXCLUDED_MISC_CHARGE_TYPES:
             continue
 
         # Prepare misc charges entry
@@ -865,8 +868,8 @@ def update_bank_receipt_vouchers(import_doc_name):
     for brv in bank_receipt_vouchers:
         brv_doc = frappe.get_doc("Bank Receipt Voucher", brv["name"], ignore_permissions=True)
 
-        # LC Margin is a payment against the LC, not an actual import expense
-        if brv_doc.import_charge_type == "LC Margin":
+        # Skip excluded charge types (LC Margin, LC Retirement, Wire Transfer)
+        if brv_doc.import_charge_type in EXCLUDED_MISC_CHARGE_TYPES:
             continue
 
         # Prepare misc charges entry (negative amount for receipts)
@@ -914,9 +917,9 @@ def calculate_total_import_charges(import_doc_name):
     
     total_import_charges = sum(row.amount for row in import_doc.linked_import_charges) or 0
     total_service_sales_tax = sum(row.total_st for row in import_doc.linked_import_charges) or 0
-    total_misc_import_charges = sum(row.amount for row in import_doc.linked_misc_import_charges) or 0
+    total_misc_import_charges = sum(row.amount for row in import_doc.linked_misc_import_charges if row.import_charge_type not in EXCLUDED_MISC_CHARGE_TYPES) or 0
     total_invoices_amount = sum(row.total_base_value for row in import_doc.linked_purchase_invoices) or 0
-    total_customs_duty = sum(row.amount for row in import_doc.linked_misc_import_charges if row.import_charge_type=="Customs Duty") or 0
+    total_customs_duty = sum(row.amount for row in import_doc.linked_misc_import_charges if row.import_charge_type not in EXCLUDED_MISC_CHARGE_TYPES and row.import_charge_type=="Customs Duty") or 0
 
 
     import_doc.total_import_charges = total_import_charges + total_misc_import_charges
@@ -1152,8 +1155,8 @@ def generate_outstanding_payments_report():
     for doc in import_docs:
         import_doc = frappe.get_doc("ImportDoc", doc.name)
 
-        # Calculate Open Expenses
-        open_exps = sum(row.amount for row in import_doc.linked_misc_import_charges) or 0
+        # Calculate Open Expenses (excluding LC Margin, LC Retirement, Wire Transfer)
+        open_exps = sum(row.amount for row in import_doc.linked_misc_import_charges if row.import_charge_type not in EXCLUDED_MISC_CHARGE_TYPES) or 0
 
         # Calculate Other Expenses
         other_exp = sum(row.total_st for row in import_doc.linked_import_charges) or 0

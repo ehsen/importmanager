@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from importmanager.import_utils import EXCLUDED_MISC_CHARGE_TYPES
 
 def execute(filters=None):
     columns = get_columns()
@@ -47,8 +48,8 @@ def generate_outstanding_lc_report(filters):
             except Exception as e:
                 frappe.log_error(f"Error retrieving PO {import_doc.linked_purchase_order}: {str(e)}", "LC Report")
 
-        # Calculate charges
-        misc_charges = sum(row.amount for row in import_doc.get("linked_misc_import_charges") or [])
+        # Calculate charges (excluding LC Margin, LC Retirement, Wire Transfer)
+        misc_charges = sum(row.amount for row in import_doc.get("linked_misc_import_charges") or [] if row.import_charge_type not in EXCLUDED_MISC_CHARGE_TYPES)
         service_charges = sum(row.total_incl_tax for row in import_doc.get("linked_import_charges") or [])
         duties_and_taxes = 0  # Placeholder for future logic
         total_outstanding = misc_charges + service_charges + duties_and_taxes
