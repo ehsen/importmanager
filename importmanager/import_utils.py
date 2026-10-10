@@ -763,8 +763,7 @@ def update_cash_payment_vouchers(import_doc_name):
         "Cash Payment Voucher",
         filters={"import_document": import_doc_name, "docstatus": 1},
         fields=["name"],
-        ignore_permissions=True,
-        docstatus=1
+        ignore_permissions=True
     )
     
     if not cash_payment_vouchers:
@@ -810,8 +809,7 @@ def update_bank_payment_vouchers(import_doc_name):
         "Bank Payment Voucher",
         filters={"import_document": import_doc_name, "docstatus": 1},
         fields=["name"],
-        ignore_permissions=True,
-        
+        ignore_permissions=True
     )
     if not bank_payment_vouchers:
         return
@@ -857,8 +855,7 @@ def update_bank_receipt_vouchers(import_doc_name):
         "Bank Receipt Voucher",
         filters={"import_document": import_doc_name, "docstatus": 1},
         fields=["name"],
-        ignore_permissions=True,
-        docstatus=1
+        ignore_permissions=True
     )
     
     if not bank_receipt_vouchers:
